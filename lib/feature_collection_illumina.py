@@ -185,15 +185,33 @@ class AlignmentAnnotatorIllumina:
         insert_sizes = []
         mapqs = []
         all_reads = 0
+        all_reads_extended = 0
+        clipped_reads = 0
         split_reads = 0
+        discordant_reads = 0
 
-        for read in self.bam.fetch(chrom, start, stop):
-            insert_sizes.append(abs(read.template_length))
-            mapqs.append(read.mapping_quality)
-            all_reads += 1
-            if read.has_tag('SA'):
-                split_reads += 1
-        
+        for read in self.bam.fetch(chrom, start-5, stop+5):
+            # add 5 bp padding because clipped bases cannot be used to fetch reads from a BAM file
+
+            if not read.reference_end <= start and not read.reference_start >= stop:
+                # only consider reads that overlap with the region for which we want to calculate the features
+                insert_sizes.append(abs(read.template_length))
+                mapqs.append(read.mapping_quality)
+                all_reads += 1
+                if read.has_tag('SA'):
+                    split_reads += 1
+                if read.is_reverse != read.mate_is_reverse:
+                    discordant_reads += 1
+
+            # for clipped reads, we need to extend the region by 5 bp
+            if not read.is_unmapped:
+                all_reads_extended += 1
+                clip_span = self.get_clipped_span(read)
+                if clip_span != None:
+                    overlap = self.get_overlap(clip_span, [start, stop])
+                    if overlap > 0:
+                        clipped_reads += 1
+            
         if all_reads > 0:
              # add 0.1 to avoid -inf values
             insertsize_mean = np.round(np.log2((np.mean(insert_sizes) + 0.1) / (self.baseline_insertsize_median + 0.1)), 3)
@@ -203,6 +221,8 @@ class AlignmentAnnotatorIllumina:
             mapping_quality_std = np.round(np.log2((np.std(mapqs) + 0.1) / (self.baseline_mapq_std + 0.1)), 3)
 
             splitreads_proportion = np.round(split_reads / all_reads, 3)
+            clippedreads_proportion = np.round(clipped_reads / all_reads_extended, 3)
+            discordant_proportion = np.round(discordant_reads / all_reads, 3)
         else:
             # special case: no reads in region
             insertsize_mean = np.round(np.log2(0.1 / (self.baseline_insertsize_median + 0.1)), 3)
@@ -212,25 +232,10 @@ class AlignmentAnnotatorIllumina:
             mapping_quality_std = np.round(np.log2(0.1 / (self.baseline_mapq_std + 0.1)), 3)
 
             splitreads_proportion = 0
-
-        """ Calculates the proportion of clipped reads (only the clipped segment of a read) in a region. """
-        all_reads_extended = 0
-        clipped_reads = 0
-        for read in self.bam.fetch(chrom, start-5, stop+5):
-            # add 5 bp padding because clipped bases cannot be used to fetch reads from a BAM file
-            if not read.is_unmapped:
-                all_reads_extended += 1
-                clip_span = self.get_clipped_span(read)
-                if clip_span != None:
-                    overlap = self.get_overlap(clip_span, [start, stop])
-                    if overlap > 0:
-                        clipped_reads += 1
-        if all_reads > 0:
-            clippedreads_proportion = np.round(clipped_reads / all_reads_extended, 3)
-        else:
             clippedreads_proportion = 0
+            discordant_proportion = 0
 
-        return pd.Series([insertsize_mean, insertsize_std, mapping_quality_mean, mapping_quality_std, splitreads_proportion, clippedreads_proportion], index =['ill_isize_mean_' + suffix, 'ill_isize_std_' + suffix, 'ill_mapq_mean_' + suffix, 'ill_mapq_std_' + suffix, 'ill_splitreads_' + suffix, 'ill_clipreads_' + suffix])
+        return pd.Series([insertsize_mean, insertsize_std, mapping_quality_mean, mapping_quality_std, splitreads_proportion, clippedreads_proportion, discordant_proportion], index =['ill_isize_mean_' + suffix, 'ill_isize_std_' + suffix, 'ill_mapq_mean_' + suffix, 'ill_mapq_std_' + suffix, 'ill_splitreads_' + suffix, 'ill_clipreads_' + suffix, 'ill_discordant_' + suffix])
         
         
     def annotate_read_based_features(self):
@@ -238,37 +243,37 @@ class AlignmentAnnotatorIllumina:
         print(self.chrom + ': annotating read-based features')
         
         # Annotate non-BNDs
-        self.df_calls_annot.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I']] = self.df_calls_annot.progress_apply(lambda x: 
+        self.df_calls_annot.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I', 'ill_discordant_I']] = self.df_calls_annot.progress_apply(lambda x: 
                                                                           self.calculate_read_based_features(x['chrom'], x['start'] - 50, 
                                                                           x['start'], 'I'), axis=1, result_type ='expand')
        
-        self.df_calls_annot.loc[:, ['ill_isize_mean_II', 'ill_isize_std_II', 'ill_mapq_mean_II', 'ill_mapq_std_II', 'ill_splitreads_II', 'ill_clipreads_II']] = self.df_calls_annot.progress_apply(lambda x: 
+        self.df_calls_annot.loc[:, ['ill_isize_mean_II', 'ill_isize_std_II', 'ill_mapq_mean_II', 'ill_mapq_std_II', 'ill_splitreads_II', 'ill_clipreads_II', 'ill_discordant_II']] = self.df_calls_annot.progress_apply(lambda x: 
                                                                             self.calculate_read_based_features(x['chrom'], x['start'], 
                                                                             x['start'] + 50, 'II'), axis=1, result_type ='expand')
        
-        self.df_calls_annot.loc[:, ['ill_isize_mean_III', 'ill_isize_std_III', 'ill_mapq_mean_III', 'ill_mapq_std_III', 'ill_splitreads_III', 'ill_clipreads_III']] = self.df_calls_annot.progress_apply(lambda x: 
+        self.df_calls_annot.loc[:, ['ill_isize_mean_III', 'ill_isize_std_III', 'ill_mapq_mean_III', 'ill_mapq_std_III', 'ill_splitreads_III', 'ill_clipreads_III', 'ill_discordant_III']] = self.df_calls_annot.progress_apply(lambda x: 
                                                                               self.calculate_read_based_features(x['chrom'], x['end'] - 50, 
                                                                               x['end'], 'III'), axis=1, result_type ='expand')
 
-        self.df_calls_annot.loc[:, ['ill_isize_mean_IV', 'ill_isize_std_IV', 'ill_mapq_mean_IV', 'ill_mapq_std_IV', 'ill_splitreads_IV', 'ill_clipreads_IV']] = self.df_calls_annot.progress_apply(lambda x: 
+        self.df_calls_annot.loc[:, ['ill_isize_mean_IV', 'ill_isize_std_IV', 'ill_mapq_mean_IV', 'ill_mapq_std_IV', 'ill_splitreads_IV', 'ill_clipreads_IV', 'ill_discordant_IV']] = self.df_calls_annot.progress_apply(lambda x: 
                                                                               self.calculate_read_based_features(x['chrom'], x['end'], 
                                                                               x['end'] + 50, 'IV'), axis=1, result_type ='expand')
 
         # Annotate BNDs
-        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
+        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I', 'ill_discordant_I']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
                                                                           self.calculate_read_based_features(x['chrom'], x['start'] - 50, 
                                                                           x['start'], 'I'), axis=1, result_type ='expand')
        
-        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_II', 'ill_isize_std_II', 'ill_mapq_mean_II', 'ill_mapq_std_II', 'ill_splitreads_II', 'ill_clipreads_II']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
+        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_II', 'ill_isize_std_II', 'ill_mapq_mean_II', 'ill_mapq_std_II', 'ill_splitreads_II', 'ill_clipreads_II', 'ill_discordant_II']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
                                                                             self.calculate_read_based_features(x['chrom'], x['start'], 
                                                                             x['start'] + 50, 'II'), axis=1, result_type ='expand')
 
-        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_III', 'ill_isize_std_III', 'ill_mapq_mean_III', 'ill_mapq_std_III', 'ill_splitreads_III', 'ill_clipreads_III']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
+        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_III', 'ill_isize_std_III', 'ill_mapq_mean_III', 'ill_mapq_std_III', 'ill_splitreads_III', 'ill_clipreads_III', 'ill_discordant_III']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
                                                                               self.calculate_read_based_features(x['chrom2'], x['end'] - 50, 
                                                                               x['end'], 'III'), axis=1, result_type ='expand')
 
         
-        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_IV', 'ill_isize_std_IV', 'ill_mapq_mean_IV', 'ill_mapq_std_IV', 'ill_splitreads_IV', 'ill_clipreads_IV']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
+        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_IV', 'ill_isize_std_IV', 'ill_mapq_mean_IV', 'ill_mapq_std_IV', 'ill_splitreads_IV', 'ill_clipreads_IV', 'ill_discordant_IV']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
                                                                               self.calculate_read_based_features(x['chrom2'], x['end'], 
                                                                               x['end'] + 50, 'IV'), axis=1, result_type ='expand')
 
@@ -282,9 +287,10 @@ class AlignmentAnnotatorIllumina:
 
         alignment_columns = []
         for feature in ['ill_cov_mean_', 'ill_cov_std_', 'ill_isize_mean_', 'ill_isize_std_', 'ill_mapq_mean_', 'ill_mapq_std_', 
-                        'ill_clipreads_', 'ill_splitreads_']:
+                        'ill_clipreads_', 'ill_splitreads_', 'ill_discordant_']:
             for suffix in ['I', 'II', 'III', 'IV']:
                 alignment_columns.append(feature + suffix)
         columns_reordered = ['sample', 'id', 'type', 'chrom', 'chrom2', 'start', 'end'] + alignment_columns
         self.df_calls_annot = self.df_calls_annot[columns_reordered]
         self.df_calls_annot.to_csv(self.filename_variants_ill_annot, index=False, na_rep='NA', sep='\t')
+        self.bam.close()

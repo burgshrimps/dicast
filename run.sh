@@ -5,22 +5,22 @@ PWD="/confidential/FamilyR13/DATA/10x/sv_compare/results/${case}_${refname}"
 echo $PWD
 
 step5=false
-step6=true
-step7=false
+step6=false
+step7=true
 
 if $step5; then
 	mkdir -p ensemble
-	python3 /confidential/tGenVar/scripts/tGenVar/dicast/training/00_prepare_ensemble.py ${case} ${refname} ${PWD}/${case}.decast_input.csv ${PWD}/ensemble/${case}_${refname}.SVs.raw.tsv /confidential/FamilyR13/DATA/10x/sv_compare/params_ensemble.json
+	python3 /confidential/tGenVar/scripts/tGenVar/dicast/00_prepare_ensemble.py ${case} ${refname} ${PWD}/${case}.decast_input.csv ${PWD}/ensemble/${case}_${refname}.SVs.raw.tsv /confidential/FamilyR13/DATA/10x/sv_compare/params_ensemble.json
 fi
 
 if $step6; then
-    python3 /confidential/tGenVar/scripts/tGenVar/dicast/training/01_collect_reference.py ${case} ${refname} ${PWD}/ensemble/${case}_${refname}.SVs.raw.tsv ${PWD}/ensemble/${case}_${refname}.SVs.ref.tsv /confidential/FamilyR13/DATA/10x/sv_compare/params_ensemble.json
+    python3 /confidential/tGenVar/scripts/tGenVar/dicast/01_collect_reference.py ${case} ${refname} ${PWD}/ensemble/${case}_${refname}.SVs.raw.tsv ${PWD}/ensemble/${case}_${refname}.SVs.ref.tsv /confidential/FamilyR13/DATA/10x/sv_compare/params_ensemble.json
 fi
 
 if $step7; then
     for CHR in {1..22} X Y
     do
-        python3 /confidential/tGenVar/scripts/tGenVar/dicast/training/01_collect_alignment.py ${case} ${refname} ${PWD}/ensemble/${case}_${refname}.SVs.raw.tsv ${PWD}/ensemble/${case}_${refname}.SVs.aln.ill.chr${CHR}.tsv /confidential/FamilyR13/DATA/10x/sv_compare/params_ensemble.json chr${CHR} &
+        python3 /confidential/tGenVar/scripts/tGenVar/dicast/01_collect_alignment.py ${case} ${refname} ${PWD}/ensemble/${case}_${refname}.SVs.raw.tsv ${PWD}/ensemble/${case}_${refname}.SVs.aln.ill.chr${CHR}.tsv /confidential/FamilyR13/DATA/10x/sv_compare/params_ensemble.json chr${CHR} &
     done
 
 	trap 'kill 0' INT   # make ^C work
