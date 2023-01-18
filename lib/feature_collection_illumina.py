@@ -192,19 +192,18 @@ class AlignmentAnnotatorIllumina:
 
         for read in self.bam.fetch(chrom, start-5, stop+5):
             # add 5 bp padding because clipped bases cannot be used to fetch reads from a BAM file
-
-            if not read.reference_end <= start and not read.reference_start >= stop:
-                # only consider reads that overlap with the region for which we want to calculate the features
-                insert_sizes.append(abs(read.template_length))
-                mapqs.append(read.mapping_quality)
-                all_reads += 1
-                if read.has_tag('SA'):
-                    split_reads += 1
-                if read.is_reverse != read.mate_is_reverse:
-                    discordant_reads += 1
-
-            # for clipped reads, we need to extend the region by 5 bp
             if not read.is_unmapped:
+                if not read.reference_end <= start and not read.reference_start >= stop:
+                    # only consider reads that overlap with the region for which we want to calculate the features
+                    insert_sizes.append(abs(read.template_length))
+                    mapqs.append(read.mapping_quality)
+                    all_reads += 1
+                    if read.has_tag('SA'):
+                        split_reads += 1
+                    if read.is_reverse == read.mate_is_reverse:
+                        discordant_reads += 1
+
+                # for clipped reads, we need to extend the region by 5 bp
                 all_reads_extended += 1
                 clip_span = self.get_clipped_span(read)
                 if clip_span != None:
