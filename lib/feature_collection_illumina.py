@@ -188,7 +188,8 @@ class AlignmentAnnotatorIllumina:
         all_reads_extended = 0
         clipped_reads = 0
         split_reads = 0
-        discordant_reads = 0
+        disco_ff_reads = 0
+        disco_rr_reads = 0
 
         for read in self.bam.fetch(chrom, start-5, stop+5):
             # add 5 bp padding because clipped bases cannot be used to fetch reads from a BAM file
@@ -200,8 +201,10 @@ class AlignmentAnnotatorIllumina:
                     all_reads += 1
                     if read.has_tag('SA'):
                         split_reads += 1
-                    if read.is_reverse == read.mate_is_reverse:
-                        discordant_reads += 1
+                    if read.is_reverse and read.mate_is_reverse:
+                        disco_rr_reads += 1
+                    if not read.is_reverse and not read.mate_is_reverse:
+                        disco_ff_reads += 1
 
                 # for clipped reads, we need to extend the region by 5 bp
                 all_reads_extended += 1
@@ -221,7 +224,8 @@ class AlignmentAnnotatorIllumina:
 
             splitreads_proportion = np.round(split_reads / all_reads, 3)
             clippedreads_proportion = np.round(clipped_reads / all_reads_extended, 3)
-            discordant_proportion = np.round(discordant_reads / all_reads, 3)
+            disco_ff_proportion = np.round(disco_ff_reads / all_reads, 3)
+            disco_rr_proportion = np.round(disco_rr_reads / all_reads, 3)
         else:
             # special case: no reads in region
             insertsize_mean = np.round(np.log2(0.1 / (self.baseline_insertsize_median + 0.1)), 3)
@@ -232,9 +236,10 @@ class AlignmentAnnotatorIllumina:
 
             splitreads_proportion = 0
             clippedreads_proportion = 0
-            discordant_proportion = 0
+            disco_ff_proportion = 0
+            disco_rr_proportion = 0
 
-        return pd.Series([insertsize_mean, insertsize_std, mapping_quality_mean, mapping_quality_std, splitreads_proportion, clippedreads_proportion, discordant_proportion], index =['ill_isize_mean_' + suffix, 'ill_isize_std_' + suffix, 'ill_mapq_mean_' + suffix, 'ill_mapq_std_' + suffix, 'ill_splitreads_' + suffix, 'ill_clipreads_' + suffix, 'ill_discordant_' + suffix])
+        return pd.Series([insertsize_mean, insertsize_std, mapping_quality_mean, mapping_quality_std, splitreads_proportion, clippedreads_proportion, disco_ff_proportion, disco_rr_proportion], index =['ill_isize_mean_' + suffix, 'ill_isize_std_' + suffix, 'ill_mapq_mean_' + suffix, 'ill_mapq_std_' + suffix, 'ill_splitreads_' + suffix, 'ill_clipreads_' + suffix, 'ill_disco_ff_' + suffix, 'ill_disco_rr_' + suffix])
         
         
     def annotate_read_based_features(self):
@@ -242,37 +247,37 @@ class AlignmentAnnotatorIllumina:
         print(self.chrom + ': annotating read-based features')
         
         # Annotate non-BNDs
-        self.df_calls_annot.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I', 'ill_discordant_I']] = self.df_calls_annot.progress_apply(lambda x: 
+        self.df_calls_annot.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I', 'ill_disco_ff_I', 'ill_disco_rr_I']] = self.df_calls_annot.progress_apply(lambda x: 
                                                                           self.calculate_read_based_features(x['chrom'], x['start'] - 50, 
                                                                           x['start'], 'I'), axis=1, result_type ='expand')
        
-        self.df_calls_annot.loc[:, ['ill_isize_mean_II', 'ill_isize_std_II', 'ill_mapq_mean_II', 'ill_mapq_std_II', 'ill_splitreads_II', 'ill_clipreads_II', 'ill_discordant_II']] = self.df_calls_annot.progress_apply(lambda x: 
+        self.df_calls_annot.loc[:, ['ill_isize_mean_II', 'ill_isize_std_II', 'ill_mapq_mean_II', 'ill_mapq_std_II', 'ill_splitreads_II', 'ill_clipreads_II', 'ill_disco_ff_II', 'ill_disco_rr_II']] = self.df_calls_annot.progress_apply(lambda x: 
                                                                             self.calculate_read_based_features(x['chrom'], x['start'], 
                                                                             x['start'] + 50, 'II'), axis=1, result_type ='expand')
        
-        self.df_calls_annot.loc[:, ['ill_isize_mean_III', 'ill_isize_std_III', 'ill_mapq_mean_III', 'ill_mapq_std_III', 'ill_splitreads_III', 'ill_clipreads_III', 'ill_discordant_III']] = self.df_calls_annot.progress_apply(lambda x: 
+        self.df_calls_annot.loc[:, ['ill_isize_mean_III', 'ill_isize_std_III', 'ill_mapq_mean_III', 'ill_mapq_std_III', 'ill_splitreads_III', 'ill_clipreads_III', 'ill_disco_ff_III', 'ill_disco_rr_III']] = self.df_calls_annot.progress_apply(lambda x: 
                                                                               self.calculate_read_based_features(x['chrom'], x['end'] - 50, 
                                                                               x['end'], 'III'), axis=1, result_type ='expand')
 
-        self.df_calls_annot.loc[:, ['ill_isize_mean_IV', 'ill_isize_std_IV', 'ill_mapq_mean_IV', 'ill_mapq_std_IV', 'ill_splitreads_IV', 'ill_clipreads_IV', 'ill_discordant_IV']] = self.df_calls_annot.progress_apply(lambda x: 
+        self.df_calls_annot.loc[:, ['ill_isize_mean_IV', 'ill_isize_std_IV', 'ill_mapq_mean_IV', 'ill_mapq_std_IV', 'ill_splitreads_IV', 'ill_clipreads_IV', 'ill_disco_ff_IV', 'ill_disco_rr_IV']] = self.df_calls_annot.progress_apply(lambda x: 
                                                                               self.calculate_read_based_features(x['chrom'], x['end'], 
                                                                               x['end'] + 50, 'IV'), axis=1, result_type ='expand')
 
         # Annotate BNDs
-        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I', 'ill_discordant_I']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
+        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I', 'ill_disco_ff_I', 'ill_disco_rr_I']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
                                                                           self.calculate_read_based_features(x['chrom'], x['start'] - 50, 
                                                                           x['start'], 'I'), axis=1, result_type ='expand')
        
-        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_II', 'ill_isize_std_II', 'ill_mapq_mean_II', 'ill_mapq_std_II', 'ill_splitreads_II', 'ill_clipreads_II', 'ill_discordant_II']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
+        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_II', 'ill_isize_std_II', 'ill_mapq_mean_II', 'ill_mapq_std_II', 'ill_splitreads_II', 'ill_clipreads_II', 'ill_disco_ff_II', 'ill_disco_rr_II']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
                                                                             self.calculate_read_based_features(x['chrom'], x['start'], 
                                                                             x['start'] + 50, 'II'), axis=1, result_type ='expand')
 
-        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_III', 'ill_isize_std_III', 'ill_mapq_mean_III', 'ill_mapq_std_III', 'ill_splitreads_III', 'ill_clipreads_III', 'ill_discordant_III']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
+        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_III', 'ill_isize_std_III', 'ill_mapq_mean_III', 'ill_mapq_std_III', 'ill_splitreads_III', 'ill_clipreads_III', 'ill_disco_ff_III', 'ill_disco_rr_III']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
                                                                               self.calculate_read_based_features(x['chrom2'], x['end'] - 50, 
                                                                               x['end'], 'III'), axis=1, result_type ='expand')
 
         
-        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_IV', 'ill_isize_std_IV', 'ill_mapq_mean_IV', 'ill_mapq_std_IV', 'ill_splitreads_IV', 'ill_clipreads_IV', 'ill_discordant_IV']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
+        self.df_calls_annot_bnd.loc[:, ['ill_isize_mean_IV', 'ill_isize_std_IV', 'ill_mapq_mean_IV', 'ill_mapq_std_IV', 'ill_splitreads_IV', 'ill_clipreads_IV', 'ill_disco_ff_IV', 'ill_disco_rr_IV']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
                                                                               self.calculate_read_based_features(x['chrom2'], x['end'], 
                                                                               x['end'] + 50, 'IV'), axis=1, result_type ='expand')
 
@@ -286,7 +291,7 @@ class AlignmentAnnotatorIllumina:
 
         alignment_columns = []
         for feature in ['ill_cov_mean_', 'ill_cov_std_', 'ill_isize_mean_', 'ill_isize_std_', 'ill_mapq_mean_', 'ill_mapq_std_', 
-                        'ill_clipreads_', 'ill_splitreads_', 'ill_discordant_']:
+                        'ill_clipreads_', 'ill_splitreads_', 'ill_disco_ff_', 'ill_disco_rr_']:
             for suffix in ['I', 'II', 'III', 'IV']:
                 alignment_columns.append(feature + suffix)
         columns_reordered = ['sample', 'id', 'type', 'chrom', 'chrom2', 'start', 'end'] + alignment_columns
