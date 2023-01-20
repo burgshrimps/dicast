@@ -148,7 +148,7 @@ df_raw['outbounds'] = df_raw.apply(lambda x: check_out_of_bounds(x['type'], x['c
 df_raw = df_raw[~df_raw['outbounds']].copy().drop('outbounds', axis=1).reset_index(drop=True)
 
 # Extract IDs of confirmed SVs
-df_tgenvar = df_tgenvar[df_tgenvar['StatusSimple'] == 'Confirmed'].copy().reset_index(drop=True)
+df_tgenvar = df_tgenvar[(df_tgenvar['StatusSimple'] == 'Confirmed') | (df_tgenvar['StatusSimple'] == 'ConfirmedPublic')].copy().reset_index(drop=True)
 confirmed_calls = {'delly' : [], 'manta' : [], 'lumpy' : []}
 
 for i in range(len(df_tgenvar)):

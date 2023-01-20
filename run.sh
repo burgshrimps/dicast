@@ -1,5 +1,5 @@
-case="17-08"
-refname="hg38"
+case=$1
+refname=$2
 PWD="/confidential/FamilyR13/DATA/10x/sv_compare/results/${case}_${refname}"
 
 echo $PWD
