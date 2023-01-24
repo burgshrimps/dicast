@@ -78,8 +78,7 @@ class AlignmentAnnotatorIllumina:
             stop = start + s
             for read in self.bam.fetch(self.chrom, start, stop):
                 if not read.is_unmapped and not read.mate_is_unmapped:
-                    if not read.is_secondary:
-                        insert_sizes.append(abs(read.template_length))
+                    insert_sizes.append(abs(read.template_length))
             
         self.baseline_insertsize_median = np.median(insert_sizes)
         self.baseline_insertsize_mad = mad(insert_sizes)
@@ -101,8 +100,7 @@ class AlignmentAnnotatorIllumina:
             stop = start + s
             for read in self.bam.fetch(self.chrom, start, stop):
                 if not read.is_unmapped:
-                    if not read.is_secondary:
-                        mapqs.append(read.mapping_quality)
+                    mapqs.append(read.mapping_quality)
             
         self.baseline_mapq_mean = np.mean(mapqs)
         self.baseline_mapq_std = np.std(mapqs)
@@ -197,7 +195,7 @@ class AlignmentAnnotatorIllumina:
 
         for read in self.bam.fetch(chrom, start-5, stop+5):
             # add 5 bp padding because clipped bases cannot be used to fetch reads from a BAM file
-            if not read.is_unmapped and not read.is_secondary:
+            if not read.is_unmapped:
                 if not read.reference_end <= start and not read.reference_start >= stop:
                     # only consider reads that overlap with the region for which we want to calculate the features
                     insert_sizes.append(abs(read.template_length))
