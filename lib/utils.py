@@ -6,20 +6,33 @@ from matplotlib.colors import ListedColormap
 from matplotlib import gridspec
 import pandas as pd
 import pysam
+import os
 
 
-def read_parameters(file, SAMPLE, REF):
+def read_parameters(file):
     """ Reads parameter file and saves them to dictionary. """
+
     with open(file,'r') as f:
         params = json.load(f)
-    params['sample_name'] = SAMPLE
-    params['reference_name'] = REF
     return params
 
 
-def replace_filename(filename, params):
+def replace_filename(filename, sample, ref):
     """ Replaces sample name in filename. """
-    return filename.replace('SAMPLE', params['sample_name']).replace('REF', params['reference_name'])
+
+    return filename.replace('SAMPLE', sample).replace('REF', ref)
+
+
+def read_vcf(filename):
+    """ Reads VCF file as a pysam.VariantFile object and takes care of sample names. """
+
+    if os.path.exists(filename):
+        vcf = pysam.VariantFile(filename)
+    else:
+        # Smoove appears in lumpy filenames
+        vcf = pysam.VariantFile(filename.replace('-', '_').replace('_smoove', '-smoove'))
+
+    return vcf
 
 
 def compute_overlap(s1, s2, e1, e2):
@@ -99,6 +112,7 @@ def compute_aln_matrix(bam, chrom, start, stop, size=100):
 
 def pad_alignment_matrices(aln_matrix_left, aln_matrix_right):
     """ Pads alignment matrices with zeros to make them the same height. """
+
     if len(aln_matrix_right) < len(aln_matrix_left):
         aln_matrix_right = np.pad(aln_matrix_right, ((0, len(aln_matrix_left) - len(aln_matrix_right)), (0, 0)), 'constant', constant_values=(-1, -1))
     elif len(aln_matrix_right) > len(aln_matrix_left):
@@ -108,6 +122,7 @@ def pad_alignment_matrices(aln_matrix_left, aln_matrix_right):
 
 def compute_cov_df(params, chrom, start, stop, minq=30):
     """ Computes coverage for given region. """
+
     alignment_dir = replace_filename(params['alignments']['illumina_directory'], params)
     alignment_filename = replace_filename(params['alignments']['illumina_filename'], params).replace('-', '_')
     cov = pd.DataFrame([x.split('\t') for x in pysam.depth('/'.join([alignment_dir, alignment_filename]), '-r', chrom + ':' + str(start) + '-' + str(stop), '-a').split('\n')[:-1]])
@@ -123,6 +138,7 @@ def compute_cov_df(params, chrom, start, stop, minq=30):
 
 def compute_rep_df(params, chrom, start, stop, padding=500):
     """ Computes repeat overlap for a given region. """
+
     ref_dir_root = replace_filename(params['reference']['directory'], params)
     ref_dir_annot = params['reference']['subdirectory_annotation']
     ref_dir = '/'.join([ref_dir_root, ref_dir_annot])
@@ -138,5 +154,6 @@ def compute_rep_df(params, chrom, start, stop, padding=500):
 
 def mad(arr):
     """ Median absolute deviation. """
+    
     med = np.median(arr)
     return np.median(np.abs(arr - med))

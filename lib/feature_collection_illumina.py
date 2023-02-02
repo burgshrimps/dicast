@@ -2,6 +2,8 @@ import pysam
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+import os
+import logging
 
 from lib.utils import replace_filename, mad
 
@@ -11,23 +13,33 @@ tqdm.pandas()
 class AlignmentAnnotatorIllumina:
     """ Object to annotate a set of SV calls based on features obtained from an Illumina alignment file. """
 
-    def __init__(self, params, input_file, output_file, sample, ref, chrom=None):
-        # Meta data
-        self.sample_name = sample
-        self.reference_name = ref
-        self.chrom = chrom
+    def __init__(self, sample, ref, workdir, params, chrom=None):
+        """ Initialize class. """
 
+        # Meta data
+        self.sample = sample
+        self.ref = ref
+        self.workdir = workdir
+        self.params = params
+        self.chrom = chrom
+        self.cov_thr = 6 # Threshold for log2 change in coverage to be considered for feature extraction, otherwise jump
+        
         # Alignment file
-        self.alignment_dir = replace_filename(params['alignments']['illumina_directory'], params)
-        self.alignment_filename = replace_filename(params['alignments']['illumina_filename'], params).replace('-', '_')
-        self.alignment_file = '/'.join([self.alignment_dir, self.alignment_filename])
+        self.alignment_file = replace_filename(params['bam']['ill'], sample, ref)
+        if not os.path.exists(self.alignment_file):
+            self.alignment_file = self.alignment_file.replace('-', '_')
+        if not os.path.exists(self.alignment_file):
+            raise FileNotFoundError(f'Alignment file {self.alignment_file} does not exist.')
 
         # Variant files
-        self.filename_variants = input_file
-        self.filename_variants_ill_annot = output_file
+        self.filename_variants = self.workdir + '/ensemble/' + self.sample + '_' + self.ref + '.SVs.raw.tsv'
+        if chrom != None:
+            self.filename_variants_ill_annot = self.workdir + '/ensemble/' + self.sample + '_' + self.ref + '.SVs.aln.ill.' + self.chrom + '.tsv'
+        else:
+            self.filename_variants_ill_annot = self.workdir + '/ensemble/' + self.sample + '_' + self.ref + '.SVs.aln.ill.tsv'
 
         # Load data
-        self.df_calls = pd.read_csv(self.filename_variants, sep='\t')
+        self.df_calls = pd.read_csv(self.filename_variants, sep='\t', low_memory=False)
         self.df_calls_annot = self.df_calls[['sample', 'id', 'type', 'chrom', 'chrom2', 'start', 'end']].copy()
         self.df_calls_annot = self.df_calls_annot.loc[self.df_calls_annot['chrom'] == chrom].reset_index(drop=True)
         self.bam = pysam.AlignmentFile(self.alignment_file, 'rb')
@@ -106,7 +118,7 @@ class AlignmentAnnotatorIllumina:
         self.baseline_mapq_std = np.std(mapqs)
 
     
-    def calculate_coverage(self, chrom, start, stop, suffix):
+    def calculate_coverage_region(self, chrom, start, stop, suffix):
         """ Calculates mean and std coverage of a region. """
 
         df = pd.DataFrame([x.split('\t') for x in pysam.depth(self.alignment_file, '-r', chrom + ':' + str(start) + '-' + str(stop), '-a').split('\n')[:-1]])
@@ -124,44 +136,48 @@ class AlignmentAnnotatorIllumina:
         return pd.Series([coverage_mean, coverage_std], index =['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix])
 
 
+    def calculate_coverage(self, df, chrom_col, pos_col, offset_left, offset_right, suffix):
+        """ Calculates mean and std coverage for all regions for a bin suffix. """
+        df = df.copy()
+        i = 0
+        pbar = tqdm(total=len(df))
+        all_exclude_idx = []
+        while i < len(df):
+            df.loc[i, ['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix]] = self.calculate_coverage_region(df.loc[i, chrom_col], df.loc[i, pos_col] - offset_left, df.loc[i, pos_col] + offset_right, suffix)
+
+            # Mechanism to jump regions with extremly high coverage
+            if df.loc[i, 'ill_cov_mean_' + suffix] > self.cov_thr:
+                exclude_idx = df[(df[pos_col] >= df.loc[i, pos_col] - offset_left) & (df[pos_col] <= df.loc[i, pos_col] + offset_right)].index
+                i += len(exclude_idx)
+                pbar.update(len(exclude_idx))
+                all_exclude_idx += list(exclude_idx)
+            else:
+                i += 1
+                pbar.update(1)
+        pbar.close()
+
+        df.drop(all_exclude_idx, inplace=True)
+        df.reset_index(drop=True, inplace=True)
+
+        return df
+
+
     def annotate_coverage(self):
         """ Annotate the variants with coverage information. """
-        print(self.chrom + ': annotating coverage')
+        print(self.chrom + ': Annotation Coverage')
 
         # Annotate non-BNDs
-        self.df_calls_annot.loc[:, ['ill_cov_mean_I', 'ill_cov_std_I']] = self.df_calls_annot.progress_apply(lambda x: 
-                                                                          self.calculate_coverage(x['chrom'], x['start'] - 50, 
-                                                                          x['start'], 'I'), axis=1, result_type ='expand')
-       
-        self.df_calls_annot.loc[:, ['ill_cov_mean_II', 'ill_cov_std_II']] = self.df_calls_annot.progress_apply(lambda x: 
-                                                                            self.calculate_coverage(x['chrom'], x['start'], 
-                                                                            x['start'] + 50, 'II'), axis=1, result_type ='expand')
-        
-        self.df_calls_annot.loc[:, ['ill_cov_mean_III', 'ill_cov_std_III']] = self.df_calls_annot.progress_apply(lambda x: 
-                                                                              self.calculate_coverage(x['chrom'], x['end'] - 50, 
-                                                                              x['end'], 'III'), axis=1, result_type ='expand')
-        
-        self.df_calls_annot.loc[:, ['ill_cov_mean_IV', 'ill_cov_std_IV']] = self.df_calls_annot.progress_apply(lambda x: 
-                                                                            self.calculate_coverage(x['chrom'], x['end'], 
-                                                                            x['end'] + 50, 'IV'), axis=1, result_type ='expand')
-        
-        # Annotate BNDs 
-        self.df_calls_annot_bnd.loc[:, ['ill_cov_mean_I', 'ill_cov_std_I']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
-                                                                          self.calculate_coverage(x['chrom'], x['start'] - 50, 
-                                                                          x['start'], 'I'), axis=1, result_type ='expand')
-       
-        self.df_calls_annot_bnd.loc[:, ['ill_cov_mean_II', 'ill_cov_std_II']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
-                                                                            self.calculate_coverage(x['chrom'], x['start'], 
-                                                                            x['start'] + 50, 'II'), axis=1, result_type ='expand')
+        self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'start', 50, 0, 'I')
+        self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'start', 0, 50, 'II')
+        self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'end', 50, 0, 'III')
+        self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'end', 0, 50, 'IV')
 
-        self.df_calls_annot_bnd.loc[:, ['ill_cov_mean_III', 'ill_cov_std_III']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
-                                                                              self.calculate_coverage(x['chrom2'], x['end'] - 50, 
-                                                                              x['end'], 'III'), axis=1, result_type ='expand')
-        
-        self.df_calls_annot_bnd.loc[:, ['ill_cov_mean_IV', 'ill_cov_std_IV']] = self.df_calls_annot_bnd.progress_apply(lambda x: 
-                                                                            self.calculate_coverage(x['chrom2'], x['end'], 
-                                                                            x['end'] + 50, 'IV'), axis=1, result_type ='expand')
-        
+        # Annotate BNDs
+        self.df_calls_annot_bnd = self.calculate_coverage(self.df_calls_annot_bnd, 'chrom', 'start', 50, 0, 'I')
+        self.df_calls_annot_bnd = self.calculate_coverage(self.df_calls_annot_bnd, 'chrom', 'start', 0, 50, 'II')
+        self.df_calls_annot_bnd = self.calculate_coverage(self.df_calls_annot_bnd, 'chrom2', 'end', 50, 0, 'III')
+        self.df_calls_annot_bnd = self.calculate_coverage(self.df_calls_annot_bnd, 'chrom2', 'end', 0, 50, 'IV')
+
 
     def get_overlap(self, a, b):
         """ Returns the overlap between two intervals. """
@@ -246,7 +262,7 @@ class AlignmentAnnotatorIllumina:
         
     def annotate_read_based_features(self):
         """ Annotate the variants with read-based features. """
-        print(self.chrom + ': annotating read-based features')
+        print(self.chrom + ': Annotation Read-Based Features')
         
         # Annotate non-BNDs
         self.df_calls_annot.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I', 'ill_disco_ff_I', 'ill_disco_rr_I']] = self.df_calls_annot.progress_apply(lambda x: 
@@ -287,7 +303,7 @@ class AlignmentAnnotatorIllumina:
     def to_csv(self):
         """ Writes the annotated variants to a csv file. """
 
-        print(self.chrom + ': writing to csv')
+        print(self.chrom + ': Writing to CSV')
 
         self.df_calls_annot = pd.concat([self.df_calls_annot, self.df_calls_annot_bnd], ignore_index=True)
 

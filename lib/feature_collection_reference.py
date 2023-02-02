@@ -11,33 +11,32 @@ class ReferenceAnnotator:
     """ Object to annotate a set of SV calls based on features obtained from a reference genome. """
 
 
-    def __init__(self, params, input_file, output_file, sample, ref):
+    def __init__(self, sample, ref, workdir, params):
 
         # Meta data
-        self.sample_name = sample
-        self.reference_name = ref
+        self.sample = sample
+        self.ref = ref
+        self.workdir = workdir
         
         # Reference files
-        ref_dir_root = replace_filename(params['reference']['directory'], params)
-        ref_dir_annot = params['reference']['subdirectory_annotation']
+        ref_dir_root = params['ref'][self.ref]['directory']
+        ref_dir_annot = params['ref'][self.ref]['subdirectory_annotation']
         self.ref_dir = '/'.join([ref_dir_root, ref_dir_annot])
-        self.filename_repeats = replace_filename(params['reference']['filename_repeats'], params)
-        self.filename_vntrs = replace_filename(params['reference']['filename_vntrs'], params)
-        self.filename_strs = replace_filename(params['reference']['filename_strs'], params)
-        self.filename_gc = replace_filename(params['reference']['filename_gc'], params)
-        self.filename_cpgislands = replace_filename(params['reference']['filename_cpgislands'], params)
-        self.filename_centromeres = replace_filename(params['reference']['filename_centromeres'], params)
-        self.filename_asmb_gaps = replace_filename(params['reference']['filename_asmb_gaps'], params)
-        self.filename_alt_haps = replace_filename(params['reference']['filename_alt_haps'], params)
-        self.filename_genes = replace_filename(params['reference']['filename_genes'], params)
-        self.filename_orphanet = replace_filename(params['reference']['filename_orphanet'], params)
+        self.filename_repeats = params['ref'][self.ref]['filename_repeats']
+        self.filename_vntrs = params['ref'][self.ref]['filename_vntrs']
+        self.filename_strs = params['ref'][self.ref]['filename_strs']
+        self.filename_gc = params['ref'][self.ref]['filename_gc']
+        self.filename_cpgislands = params['ref'][self.ref]['filename_cpgislands']
+        self.filename_centromeres = params['ref'][self.ref]['filename_centromeres']
+        self.filename_asmb_gaps = params['ref'][self.ref]['filename_asmb_gaps']
+        self.filename_alt_haps = params['ref'][self.ref]['filename_alt_haps']
 
         # Variant Files
-        self.filename_variants = input_file
-        self.filename_variants_ref_annot = output_file
+        self.filename_variants = self.workdir + '/ensemble/' + self.sample + '_' + self.ref + '.SVs.raw.tsv'
+        self.filename_variants_ref_annot = self.workdir + '/ensemble/' + self.sample + '_' + self.ref + '.SVs.ref.tsv'
 
         # Load data
-        self.df_calls = pd.read_csv(self.filename_variants, sep='\t')
+        self.df_calls = pd.read_csv(self.filename_variants, sep='\t', low_memory=False)
         self.df_calls_annot = self.df_calls[['sample', 'id', 'type', 'chrom', 'chrom2', 'start', 'end']].copy()
         self.df_repeats = pd.read_csv('/'.join([self.ref_dir, self.filename_repeats]), index_col=0, sep='\t')
         self.df_vntrs = pd.read_csv('/'.join([self.ref_dir, self.filename_vntrs]), sep='\t', header=None, names=['chrom', 'start', 'stop', 'class'])
@@ -47,8 +46,6 @@ class ReferenceAnnotator:
         self.df_centromeres = pd.read_csv('/'.join([self.ref_dir, self.filename_centromeres]), sep='\t')
         self.df_asmb_gaps = pd.read_csv('/'.join([self.ref_dir, self.filename_asmb_gaps]), sep='\t')
         self.df_alt_haps = pd.read_csv('/'.join([self.ref_dir, self.filename_alt_haps]), sep='\t')
-        self.df_genes = pd.read_csv('/'.join([self.ref_dir, self.filename_genes]), sep='\t')
-        self.df_orphanet = pd.read_csv('/'.join([self.ref_dir, self.filename_orphanet]), sep='\t')
 
         # Split annotation dataframes into chromosomal and interchromosomal
         df_bnd_chrom1 = self.df_calls_annot.loc[self.df_calls_annot['type'] == 'BND'].copy().reset_index(drop=True)
