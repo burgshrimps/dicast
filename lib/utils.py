@@ -23,18 +23,6 @@ def replace_filename(filename, sample, ref):
     return filename.replace('SAMPLE', sample).replace('REF', ref)
 
 
-def read_vcf(filename):
-    """ Reads VCF file as a pysam.VariantFile object and takes care of sample names. """
-
-    if os.path.exists(filename):
-        vcf = pysam.VariantFile(filename)
-    else:
-        # Smoove appears in lumpy filenames
-        vcf = pysam.VariantFile(filename.replace('-', '_').replace('_smoove', '-smoove'))
-
-    return vcf
-
-
 def compute_overlap(s1, s2, e1, e2):
     """ Computes overlap between two segments. """
     return max(0, min(e1, e2) - max(s1, s2))

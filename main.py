@@ -3,15 +3,20 @@ import logging
 import sys
 from joblib import Parallel, delayed
 import pandas as pd
+from glob import glob
 
 from lib.parsing import parse_arguments
 from lib.utils import read_parameters
 from lib.prepare import VariantPrep
-from lib.feature_collection_reference import ReferenceAnnotator
-from lib.feature_collection_illumina import AlignmentAnnotatorIllumina
+from lib.collect_reference import ReferenceAnnotator
+from lib.collect_illumina import AlignmentAnnotatorIllumina
+from lib.model import Dicast
+
 
 def collect_aln_features(chrom):
-    """ Collects alignment features for a given chromosome. """
+    """ Collects alignment features for a given chromosome. 
+    
+    param chrom: Chromosome name """
 
     AAI = AlignmentAnnotatorIllumina(arguments.sample, arguments.ref, arguments.workdir, params, chrom=chrom)
     AAI.calculate_coverage_baseline()
@@ -20,6 +25,25 @@ def collect_aln_features(chrom):
     AAI.annotate_coverage()
     AAI.annotate_read_based_features()
     AAI.to_csv()
+
+
+def combine_feature_files(sample, ref, workdir):
+    """ Combines variant, reference and alignment features into one file.
+    
+    param sample: Sample name
+    param ref: Reference name
+    param workdir: Working directory 
+    
+    return: pandas dataframe with combined features """
+
+    df_raw = pd.read_csv(f'{workdir}/ensemble/{sample}_{ref}.SVs.raw.tsv', sep='\t', low_memory=False)
+    df_ref = pd.read_csv(f'{workdir}/ensemble/{sample}_{ref}.SVs.ref.tsv', sep='\t', low_memory=False)
+    filenames_aln_ill = glob(f'{workdir}/ensemble//{sample}_{ref}.SVs.aln.ill.*.tsv')
+    df_aln_ill = pd.concat([pd.read_csv(f, sep='\t') for f in filenames_aln_ill], ignore_index=True)
+    df = df_raw.merge(df_ref.drop(['sample', 'type', 'chrom', 'chrom2', 'start', 'end'], axis=1), on='id', how='inner')
+    df = df.merge(df_aln_ill.drop(['sample', 'type', 'chrom', 'chrom2', 'start', 'end'], axis=1), on='id', how='inner')
+
+    return df
 
 
 if __name__ == '__main__':
@@ -37,7 +61,7 @@ if __name__ == '__main__':
     rootLogger.addHandler(consoleHandler)
 
     print('')
-    logging.info('############### Start DICAST-PREP ###############\n')
+    logging.info('############### Start DICAST ###############\n')
     logging.info('CMD: python3 {0}'.format(' '.join(sys.argv)))
 
     if arguments.command == 'prepare':
@@ -50,7 +74,7 @@ if __name__ == '__main__':
         print('')
         
         params = read_parameters(arguments.params)
-        """
+        
         VP = VariantPrep(arguments.sample, arguments.ref, params, arguments.workdir)
         logging.info('# Read Variants')
         VP.read_variants() 
@@ -79,30 +103,85 @@ if __name__ == '__main__':
         RA.annotate_gc_content()
         logging.info('# Save Reference Features')
         RA.to_csv()
-        """
+
         logging.info('# Collect Illumina Alignment Features')
-        #chroms = params['chroms']
-        chroms = ['chr19', 'chr20']
+        chroms = params['chroms']
         Parallel(n_jobs=len(chroms))(delayed(collect_aln_features)(chrom) for chrom in chroms)
-
+        
         logging.info('# Combination Output Files')
-        df_raw = pd.read_csv(f'{arguments.workdir}/ensemble/{arguments.sample}_{arguments.ref}.SVs.raw.tsv', sep='\t')
-        df_ref = pd.read_csv(f'{arguments.workdir}/ensemble/{arguments.sample}_{arguments.ref}.SVs.ref.tsv', sep='\t', low_memory=False)
-        filenames_aln_ill = glob(f'{arguments.workdir}/ensemble//{arguments.sample}_{arguments.ref}.SVs.aln.ill.*.tsv')
-        df_aln_ill = pd.concat([pd.read_csv(f, sep='\t') for f in filenames_aln_ill], ignore_index=True)
-        df = df_raw.merge(df_ref.drop(['sample', 'type', 'chrom', 'chrom2', 'start', 'end'], axis=1), on='id', how='inner')
-        df = df.merge(df_aln_ill.drop(['sample', 'type', 'chrom', 'chrom2', 'start', 'end'], axis=1), on='id', how='inner')
+        df = combine_feature_files(arguments.sample, arguments.ref, arguments.workdir)
         df.to_csv(f'{arguments.workdir}/ensemble/{arguments.sample}_{arguments.ref}.SVs.annot.tsv', sep='\t', index=False, na_rep='NA')
-
-        logging.info('############### Finished DICAST-PREP ###############\n')
 
     elif arguments.command == 'train':
 
         logging.info('MODE: train')
-        logging.info(f'REF: {arguments.ref}')
+        logging.info(f'TYPE: {arguments.svtype}')
+        logging.info(f'CLASSIFIER: {arguments.clf}')
+        logging.info(f'MODEL OUTPUT: {arguments.output}')
         logging.info(f'PARAMS: {arguments.params}')
-        logging.info(f'WORKDIR: {arguments.workdir}')
+        logging.info(f'EXCLUDED CHROMS: {arguments.chr_excl}')
         print('')
+
+        params = read_parameters(arguments.params)
+
+        dicast = Dicast('train', arguments.svtype, arguments.output, params, clf=arguments.clf, chr_excl=arguments.chr_excl)
+        logging.info('# Load Training Data')
+        dicast.load_data()
+        logging.info('# Filter Data')
+        dicast.filter_data()
+        logging.info('# Train Model')
+        dicast.train()
+        logging.info('# Save Model')
+        dicast.save_model()
+
+    elif arguments.command == 'test':
+
+        logging.info('MODE: test')
+        logging.info(f'TYPE: {arguments.svtype}')
+        logging.info(f'MODEL INPUT: {arguments.input}')
+        logging.info(f'PARAMS: {arguments.params}')
+        logging.info(f'INCLUDED CHROMS: {arguments.chr_incl}')
+        print('')
+
+        params = read_parameters(arguments.params)
+        dicast = Dicast('test', arguments.svtype, arguments.input, params, chr_incl=arguments.chr_incl)
+        logging.info('# Load Test Data')
+        dicast.load_data()
+        logging.info('# Filter Data')
+        dicast.filter_data()
+        logging.info('# Load Model')
+        dicast.load_model()
+        logging.info('# Predict')
+        dicast.predict()
+
+
+    elif arguments.command == 'predict':
+
+        logging.info('MODE: test')
+        logging.info(f'TYPE: {arguments.svtype}')
+        logging.info(f'MODEL INPUT: {arguments.input}')
+        logging.info(f'PARAMS: {arguments.params}')
+        logging.info(f'PREDICTIONS OUTPUT: {arguments.output}')
+        print('')
+
+        params = read_parameters(arguments.params)
+        dicast = Dicast('predict', arguments.svtype, arguments.input, params)
+        logging.info('# Load Data')
+        dicast.load_data()
+        logging.info('# Filter Data')
+        dicast.filter_data()
+        logging.info('# Load Model')
+        dicast.load_model()
+        logging.info('# Predict')
+        dicast.predict()
+        logging.info('# Save Predictions')
+        dicast.save_predictions_tsv(arguments.output)
+
+    else:
+        raise ValueError('Invalid command')
+
+    print('')
+    logging.info('############### Finished DICAST ###############\n')
 
 
     
