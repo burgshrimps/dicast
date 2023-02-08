@@ -124,11 +124,9 @@ if __name__ == '__main__':
 
         params = read_parameters(arguments.params)
 
-        dicast = Dicast('train', arguments.svtype, arguments.output, params, clf=arguments.clf, chr_excl=arguments.chr_excl)
+        dicast = Dicast('train', arguments.svtype, params, pkl=arguments.output, clf=arguments.clf, chr_excl=arguments.chr_excl)
         logging.info('# Load Training Data')
         dicast.load_data()
-        logging.info('# Filter Data')
-        dicast.filter_data()
         logging.info('# Train Model')
         dicast.train()
         logging.info('# Save Model')
@@ -144,15 +142,17 @@ if __name__ == '__main__':
         print('')
 
         params = read_parameters(arguments.params)
-        dicast = Dicast('test', arguments.svtype, arguments.input, params, chr_incl=arguments.chr_incl)
+        dicast = Dicast('test', arguments.svtype, params, pkl=arguments.input, chr_incl=arguments.chr_incl)
         logging.info('# Load Test Data')
         dicast.load_data()
-        logging.info('# Filter Data')
-        dicast.filter_data()
         logging.info('# Load Model')
         dicast.load_model()
         logging.info('# Predict')
         dicast.predict()
+        logging.info('# Compute Quality Scores')
+        dicast.compute_qual()
+        logging.info('# Save Test Results')
+        dicast.save_test(arguments.workdir)
 
 
     elif arguments.command == 'predict':
@@ -165,17 +165,46 @@ if __name__ == '__main__':
         print('')
 
         params = read_parameters(arguments.params)
-        dicast = Dicast('predict', arguments.svtype, arguments.input, params)
+        dicast = Dicast('predict', arguments.svtype, params, pkl=arguments.input)
         logging.info('# Load Data')
         dicast.load_data()
-        logging.info('# Filter Data')
-        dicast.filter_data()
         logging.info('# Load Model')
         dicast.load_model()
         logging.info('# Predict')
         dicast.predict()
         logging.info('# Save Predictions')
         dicast.save_predictions_tsv(arguments.output)
+
+    elif arguments.command == 'curate':
+
+        logging.info('MODE: curate')
+        logging.info(f'TYPE: {arguments.svtype}')
+        logging.info(f'CLASSIFIER: {arguments.clf}')
+        logging.info(f'PARAMS: {arguments.params}')
+        print('')
+
+        params = read_parameters(arguments.params)
+
+        chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 
+                  'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 
+                  'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
+
+        for chrom in chroms:
+            logging.info(f'# Processing {chrom}')
+
+            # Train on all chromosomes except the current one and then test on the current one
+            dicast = Dicast('curate', arguments.svtype, params, clf=arguments.clf, chr_excl=[chrom], chr_incl=[chrom])
+            logging.info('# Load Data')
+            dicast.load_data()
+            logging.info('# Train Model')
+            dicast.train()
+            logging.info('# Predict')
+            dicast.predict()
+            logging.info('# Compute Quality Scores')
+            dicast.compute_qual()
+            logging.info('# Select SVs for Manual Curation')
+            dicast.save_curation()
+
 
     else:
         raise ValueError('Invalid command')

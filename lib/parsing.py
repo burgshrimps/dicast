@@ -21,14 +21,20 @@ def parse_arguments(arguments = sys.argv[1:]):
 
     parser_test = subparsers.add_parser('test', help='Test a model')
     parser_test.add_argument('svtype', help='SV type to test the model for')
-    parser_train.add_argument('input', help='Input file to load the model from')
-    parser_train.add_argument('params', help='Test parameter file')
-    parser_train.add_argument('--chr_incl', help='Chromsomes to include for testing', nargs='+', default=['all'])
+    parser_test.add_argument('input', help='Input file to load the model from')
+    parser_test.add_argument('params', help='Test parameter file')
+    parser_test.add_argument('workdir', help='Working and output directory')
+    parser_test.add_argument('--chr_incl', help='Chromsomes to include for testing', nargs='+', default=['all'])
 
     parser_predict = subparsers.add_parser('predict', help='Make predictions for a set of variants')
     parser_predict.add_argument('svtype', help='SV type to make predictions for')
     parser_predict.add_argument('input', help='Input file to load the model from')
     parser_predict.add_argument('params', help='Prediction parameter file')
     parser_predict.add_argument('output', help='Output file to save the predictions')
+
+    parser_curate = subparsers.add_parser('curate', help='Generate a set of variants for manual curation')
+    parser_curate.add_argument('svtype', help='SV type to curate')
+    parser_curate.add_argument('clf', help='Classifier model to use')
+    parser_curate.add_argument('params', help='Curation parameter file')
 
     return parser.parse_args(arguments)

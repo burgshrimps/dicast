@@ -1,8 +1,0 @@
-{
-    "tgenvar" :
-    {
-        "samples" : ["17-08"],
-        "ref" : "hg38",
-        "variant_features" : "/confidential/tGenVar/scripts/tGenVar/dicast/result/SAMPLE_REF/ensemble/SAMPLE_REF.SVs.annot.tsv"
-    }
-}

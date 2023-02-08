@@ -1,0 +1,17 @@
+{
+    "tgenvar" :
+    {
+        "samples" : ["17-08"],
+        "ref" : "hg38",
+        "variant_features" : "/confidential/tGenVar/scripts/tGenVar/dicast/result/SAMPLE_REF/ensemble/SAMPLE_REF.SVs.annot.tsv",
+        "vcf" : 
+        {
+            "ill" :
+            {
+                "delly" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/delly/SAMPLE/variants.bcf",
+                "manta" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/manta/SAMPLE/results/variants/diploidSV_wINV.vcf.gz",
+                "lumpy" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/lumpy/SAMPLE/SAMPLE-smoove.genotyped.vcf.gz"
+            }
+        }
+    }
+}
