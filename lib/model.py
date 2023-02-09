@@ -13,7 +13,7 @@ from lib.utils import replace_filename
 class Dicast:
     """ Class to train a model. """
 
-    def __init__(self, mode, svtype, params, pkl=None, clf=None, chr_excl=[], chr_incl=['all']):
+    def __init__(self, mode, svtype, params, pkl=None, clf=None, clfparams=None, chr_excl=[], chr_incl=['all']):
         """ Initialize class. 
         
         param mode: string, 'train', 'test' or 'predict'
@@ -26,11 +26,16 @@ class Dicast:
 
         self.mode = mode
         self.type = svtype.upper()
-        self.clf = clf
-        self.pkl = pkl
         self.params = params
         self.chr_excl = chr_excl
         self.chr_incl = chr_incl
+
+        if pkl != None:
+            self.pkl = pkl
+        if clf != None:
+            self.clf = clf
+        if clfparams != None:
+            self.clfparams = clfparams[clf]
 
 
     def load_sample(self, sample, ref, variant_features, variant_labels=None):
@@ -211,8 +216,8 @@ class Dicast:
         X = variants_training[features]
         y = variants_training['confirmed']
 
-        if self.clf == 'rf':
-            self.model = RandomForestClassifier(n_estimators=100)
+        if self.clfparams['classifier'] == 'RandomForestClassifier':
+            self.model = RandomForestClassifier(**self.clfparams['parameters'])
         else:
             raise ValueError(f'Invalid classifier: {self.clf}')
 

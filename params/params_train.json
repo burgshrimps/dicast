@@ -4,19 +4,6 @@
         "samples" : ["17-08", "146-97", "176-98"],
         "ref" : "hg38",
         "variant_features" : "/confidential/tGenVar/scripts/tGenVar/dicast/result/SAMPLE_REF/ensemble/SAMPLE_REF.SVs.annot.tsv",
-        "variant_labels" : "/confidential/tGenVar/scripts/tGenVar/dicast/result/SAMPLE_REF/SAMPLE.decast_input.csv",
-        "models" : 
-        {
-            "RF" :
-            {
-                "models_params" : 
-                {
-                    "n_estimators" : 100,
-                    "max_depth" : 5,
-                    "random_state" : 0
-                },
-                "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models"
-            }
-        }
+        "variant_labels" : "/confidential/tGenVar/scripts/tGenVar/dicast/result/SAMPLE_REF/SAMPLE.decast_input.csv"
     }
 }

@@ -116,15 +116,17 @@ if __name__ == '__main__':
 
         logging.info('MODE: train')
         logging.info(f'TYPE: {arguments.svtype}')
-        logging.info(f'CLASSIFIER: {arguments.clf}')
-        logging.info(f'MODEL OUTPUT: {arguments.output}')
+        logging.info(f'CLASSIFIER: {arguments.clfname}')
+        logging.info(f'CLASSIFIER PARAMS: {arguments.clfparams}')
         logging.info(f'PARAMS: {arguments.params}')
         logging.info(f'EXCLUDED CHROMS: {arguments.chr_excl}')
         print('')
 
         params = read_parameters(arguments.params)
+        clfparams = read_parameters(arguments.clfparams)
+        output = clfparams[arguments.clfname]['directory'] + '/' + arguments.clfname + '_' + arguments.svtype.upper() + '.pkl'
 
-        dicast = Dicast('train', arguments.svtype, params, pkl=arguments.output, clf=arguments.clf, chr_excl=arguments.chr_excl)
+        dicast = Dicast('train', arguments.svtype, params, pkl=output, clf=arguments.clfname, clfparams=clfparams, chr_excl=arguments.chr_excl)
         logging.info('# Load Training Data')
         dicast.load_data()
         logging.info('# Train Model')
@@ -136,13 +138,13 @@ if __name__ == '__main__':
 
         logging.info('MODE: test')
         logging.info(f'TYPE: {arguments.svtype}')
-        logging.info(f'MODEL INPUT: {arguments.input}')
+        logging.info(f'MODEL INPUT: {arguments.clf}')
         logging.info(f'PARAMS: {arguments.params}')
         logging.info(f'INCLUDED CHROMS: {arguments.chr_incl}')
         print('')
 
         params = read_parameters(arguments.params)
-        dicast = Dicast('test', arguments.svtype, params, pkl=arguments.input, chr_incl=arguments.chr_incl)
+        dicast = Dicast('test', arguments.svtype, params, pkl=arguments.clf, chr_incl=arguments.chr_incl)
         logging.info('# Load Test Data')
         dicast.load_data()
         logging.info('# Load Model')
@@ -159,13 +161,13 @@ if __name__ == '__main__':
 
         logging.info('MODE: test')
         logging.info(f'TYPE: {arguments.svtype}')
-        logging.info(f'MODEL INPUT: {arguments.input}')
+        logging.info(f'MODEL INPUT: {arguments.clf}')
         logging.info(f'PARAMS: {arguments.params}')
         logging.info(f'PREDICTIONS OUTPUT: {arguments.output}')
         print('')
 
         params = read_parameters(arguments.params)
-        dicast = Dicast('predict', arguments.svtype, params, pkl=arguments.input)
+        dicast = Dicast('predict', arguments.svtype, params, pkl=arguments.clf)
         logging.info('# Load Data')
         dicast.load_data()
         logging.info('# Load Model')
@@ -193,7 +195,7 @@ if __name__ == '__main__':
             logging.info(f'# Processing {chrom}')
 
             # Train on all chromosomes except the current one and then test on the current one
-            dicast = Dicast('curate', arguments.svtype, params, clf=arguments.clf, chr_excl=[chrom], chr_incl=[chrom])
+            dicast = Dicast('curate', arguments.svtype, params, chr_excl=[chrom], chr_incl=[chrom])
             logging.info('# Load Data')
             dicast.load_data()
             logging.info('# Train Model')

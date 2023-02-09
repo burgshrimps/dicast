@@ -1,0 +1,12 @@
+{
+"RF" :
+    {
+        "classifier" : "RandomForestClassifier",
+        "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models",
+        "parameters" : 
+        {
+            "n_estimators" : 100,
+            "random_state" : 0
+        }
+    }
+}
