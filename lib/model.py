@@ -232,7 +232,6 @@ class Dicast:
         logging.info(f'# Dropped {num_svs - len(self.variants)}/{num_svs} SVs due to missing feature values')
 
         X = self.variants[features]
-        y = self.variants['confirmed']
 
         self.variants['pred_dicast'] = self.model.predict(X)
         self.variants['qual_dicast'] = self.model.predict_proba(X)[:, 1]
