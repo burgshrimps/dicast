@@ -286,9 +286,11 @@ class Dicast:
                 for techs in self.params[cohort]['vcf']:
                     for vcf in self.params[cohort]['vcf'][techs]:
                         filename = replace_filename(self.params[cohort]['vcf'][techs][vcf], sample, self.params[cohort]['ref'])
-                        if not os.path.exists(filename):
-                            print('->',filename, sample, sample.replace('-','_'))
+                        if not os.path.exists(filename): 
                             filename = replace_filename(self.params[cohort]['vcf'][techs][vcf], sample.replace('-','_'), self.params[cohort]['ref'])
+                        if not os.path.exists(filename): # Try to find file in workdir, with a misspellings in sample name
+                            logging.error(f'VCF file {filename} does not exist')
+                            sys.exit(1)
                         l_vcfsnames += [(vcf,filename)]
         for method, path in l_vcfsnames:
             input = pysam.VariantFile(path, 'r')
