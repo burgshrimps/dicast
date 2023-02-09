@@ -165,7 +165,6 @@ if __name__ == '__main__':
         logging.info(f'PARAMS: {arguments.params}')
         logging.info(f'PREDICTIONS OUTPUT: {arguments.output}')
         print('')
-
         params = read_parameters(arguments.params)
         dicast = Dicast('predict', arguments.svtype, params, pkl=arguments.clf)
         logging.info('# Load Data')
@@ -176,6 +175,8 @@ if __name__ == '__main__':
         dicast.predict()
         logging.info('# Save Predictions')
         dicast.save_predictions_tsv(arguments.output)
+        logging.info('# add prediction value to vcf file')
+        dicast.add_predictions_to_vcf()
 
     elif arguments.command == 'curate':
 
