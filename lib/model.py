@@ -226,7 +226,7 @@ class Dicast:
         if self.chr_incl[0] != 'all':
             self.variants = self.variants[self.variants['chrom'].isin(self.chr_incl)].copy().reset_index(drop=True)
 
-        features = list(self.variants.columns[12:-1]) + ['size']
+        features = list(self.variants.columns[12:]) + ['size']
         num_svs = len(self.variants)
         self.variants = self.variants.dropna(subset=features).copy().reset_index(drop=True)
         logging.info(f'# Dropped {num_svs - len(self.variants)}/{num_svs} SVs due to missing feature values')
@@ -269,7 +269,7 @@ class Dicast:
         """ Save predictions. """
 
         self.variants[['id', 'sample', 'tech', 'method', 'type', 'chrom', 'chrom2', 'start', 'end', 'size', 
-                       'filter', 'qual', 'dicast_pred', 'dicast_qual']].to_csv(out_file, sep='\t', index=False, na_rep='NA')
+                       'filter', 'qual', 'pred_dicast', 'qual_dicast']].to_csv(out_file, sep='\t', index=False, na_rep='NA')
 
 
     def save_test(self, out_root):
