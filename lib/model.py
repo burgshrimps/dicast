@@ -209,6 +209,8 @@ class Dicast:
         variants_training = self.variants[~self.variants['chrom'].isin(self.chr_excl)].copy().reset_index(drop=True)
 
         features = list(variants_training.columns[12:-1]) + ['size']
+
+        # Check how many variants are excluded due to missing feature values
         num_svs = len(variants_training)
         variants_training = variants_training.dropna(subset=features).copy().reset_index(drop=True)
         logging.info(f'# Dropped {num_svs - len(variants_training)}/{num_svs} SVs due to missing feature values')
@@ -219,7 +221,7 @@ class Dicast:
         if self.clfparams['classifier'] == 'RandomForestClassifier':
             self.model = RandomForestClassifier(**self.clfparams['parameters'])
         else:
-            raise ValueError(f'Invalid classifier: {self.clf}')
+            raise ValueError(f'Invalid classifier: {self.clfparams["classifier"]}')
 
         self.model.fit(X, y)
 
@@ -232,6 +234,12 @@ class Dicast:
             self.variants = self.variants[self.variants['chrom'].isin(self.chr_incl)].copy().reset_index(drop=True)
 
         features = list(self.variants.columns[12:]) + ['size']
+
+        # Remove confirmed column if present, this is the case during model curation
+        if 'confirmed' in features:
+            features.remove('confirmed')
+
+        # Check how many variants are excluded due to missing feature values
         num_svs = len(self.variants)
         self.variants = self.variants.dropna(subset=features).copy().reset_index(drop=True)
         logging.info(f'# Dropped {num_svs - len(self.variants)}/{num_svs} SVs due to missing feature values')

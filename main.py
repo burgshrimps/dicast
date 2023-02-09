@@ -4,6 +4,7 @@ import sys
 from joblib import Parallel, delayed
 import pandas as pd
 from glob import glob
+from tqdm import tqdm
 
 from lib.parsing import parse_arguments
 from lib.utils import read_parameters
@@ -11,6 +12,11 @@ from lib.prepare import VariantPrep
 from lib.collect_reference import ReferenceAnnotator
 from lib.collect_illumina import AlignmentAnnotatorIllumina
 from lib.model import Dicast
+
+# List of chromosomes to process
+CHROMS = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 
+          'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 
+          'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
 
 
 def collect_aln_features(chrom):
@@ -44,6 +50,20 @@ def combine_feature_files(sample, ref, workdir):
     df = df.merge(df_aln_ill.drop(['sample', 'type', 'chrom', 'chrom2', 'start', 'end'], axis=1), on='id', how='inner')
 
     return df
+
+
+def create_manual_curation_set(chrom):
+    """ Create a set of SVs for manual curation. Train on all chromosomes except the current one and then test on the current one.
+    
+    param chrom: Chromosome name """
+
+    dicast = Dicast('curate', arguments.svtype, params, clf=arguments.clfname, clfparams=clfparams, chr_excl=[chrom], chr_incl=[chrom])
+    dicast.load_data()
+    dicast.train()
+    dicast.predict()
+    dicast.compute_qual()
+    dicast.save_curation()
+    print('Finished chromosome {0}'.format(chrom))
 
 
 if __name__ == '__main__':
@@ -105,8 +125,7 @@ if __name__ == '__main__':
         RA.to_csv()
 
         logging.info('# Collect Illumina Alignment Features')
-        chroms = params['chroms']
-        Parallel(n_jobs=len(chroms))(delayed(collect_aln_features)(chrom) for chrom in chroms)
+        Parallel(n_jobs=len(CHROMS))(delayed(collect_aln_features)(chrom) for chrom in CHROMS)
         
         logging.info('# Combination Output Files')
         df = combine_feature_files(arguments.sample, arguments.ref, arguments.workdir)
@@ -181,32 +200,15 @@ if __name__ == '__main__':
 
         logging.info('MODE: curate')
         logging.info(f'TYPE: {arguments.svtype}')
-        logging.info(f'CLASSIFIER: {arguments.clf}')
+        logging.info(f'CLASSIFIER: {arguments.clfname}')
+        logging.info(f'CLASSIFIER PARAMS: {arguments.clfparams}')
         logging.info(f'PARAMS: {arguments.params}')
         print('')
 
         params = read_parameters(arguments.params)
+        clfparams = read_parameters(arguments.clfparams)
 
-        chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 
-                  'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 
-                  'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
-
-        for chrom in chroms:
-            logging.info(f'# Processing {chrom}')
-
-            # Train on all chromosomes except the current one and then test on the current one
-            dicast = Dicast('curate', arguments.svtype, params, chr_excl=[chrom], chr_incl=[chrom])
-            logging.info('# Load Data')
-            dicast.load_data()
-            logging.info('# Train Model')
-            dicast.train()
-            logging.info('# Predict')
-            dicast.predict()
-            logging.info('# Compute Quality Scores')
-            dicast.compute_qual()
-            logging.info('# Select SVs for Manual Curation')
-            dicast.save_curation()
-
+        Parallel(n_jobs=len(CHROMS))(delayed(create_manual_curation_set)(chrom) for chrom in CHROMS)
 
     else:
         raise ValueError('Invalid command')

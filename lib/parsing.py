@@ -34,7 +34,8 @@ def parse_arguments(arguments = sys.argv[1:]):
 
     parser_curate = subparsers.add_parser('curate', help='Generate a set of variants for manual curation')
     parser_curate.add_argument('svtype', help='SV type to curate')
-    parser_curate.add_argument('clf', help='Classifier model to use')
     parser_curate.add_argument('params', help='Curation parameter file')
+    parser_curate.add_argument('clfparams', help='Model parameter file')
+    parser_curate.add_argument('clfname', help='Name of model to train')
 
     return parser.parse_args(arguments)

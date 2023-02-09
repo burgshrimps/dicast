@@ -3,7 +3,7 @@
     {
         "samples" : ["17-08"],
         "ref" : "hg38",
-        "variant_features" : "/confidential/tGenVar/scripts/tGenVar/dicast/result/SAMPLE_REF/ensemble/SAMPLE_REF.SVs.annot.tsv",
+        "variant_features" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/ensemble/SAMPLE_REF.SVs.annot.tsv",
         "vcf" : 
         {
             "ill" :
