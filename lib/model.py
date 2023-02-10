@@ -7,7 +7,8 @@ import bioframe as bf
 import numpy as np
 from datetime import datetime
 import os
-
+import pysam
+import pathlib
 from lib.utils import replace_filename
 
 class Dicast:
@@ -284,6 +285,34 @@ class Dicast:
         self.variants[['id', 'sample', 'tech', 'method', 'type', 'chrom', 'chrom2', 'start', 'end', 'size', 
                        'filter', 'qual', 'pred_dicast', 'qual_dicast']].to_csv(out_file, sep='\t', index=False, na_rep='NA')
 
+
+    def add_predictions_to_vcf(self):
+        """ Add predictions to VCF. """
+        l_vcfsnames = []
+        for cohort in self.params:
+            for sample in self.params[cohort]['samples']:
+                for techs in self.params[cohort]['vcf']:
+                    for vcf in self.params[cohort]['vcf'][techs]:
+                        filename = replace_filename(self.params[cohort]['vcf'][techs][vcf], sample, self.params[cohort]['ref'])
+                        if not os.path.exists(filename): 
+                            filename = replace_filename(self.params[cohort]['vcf'][techs][vcf], sample.replace('-','_'), self.params[cohort]['ref'])
+                        if not os.path.exists(filename): # Try to find file in workdir, with a misspellings in sample name
+                            logging.error(f'VCF file {filename} does not exist')
+                            sys.exit(1)
+                        l_vcfsnames += [(vcf,filename)]
+        for method, path in l_vcfsnames:
+            input = pysam.VariantFile(path, 'r')
+            input.header.info.add("DICAST", number="1", type="String", description="Dicast prediction score")
+            output = pysam.VariantFile(path.replace('.vcf.gz','.dicast.vcf.gz'), 'w', header=input.header)
+            for record in input.fetch():
+                if record.id in self.variants['id'].values:
+                    record.info['DICAST'] = str(self.variants[self.variants['id'] == record.id]['qual_dicast'].values[0])
+                else:
+                    record.info['DICAST'] = '-1'
+                output.write(record)
+
+            input.close()
+            output.close()
 
     def save_test(self, out_root):
         """ Save test result. """
