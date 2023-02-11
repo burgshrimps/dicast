@@ -1,7 +1,7 @@
 {
     "tgenvar" :
     {
-        "samples" : ["17-08", "146-97", "176-98"],
+        "samples" : ["17-08", "146-97", "176-98", "18-5047"],
         "ref" : "hg38",
         "variant_features" : "/confidential/tGenVar/scripts/tGenVar/dicast/result/SAMPLE_REF/ensemble/SAMPLE_REF.SVs.annot.tsv",
         "variant_labels" : "/confidential/tGenVar/scripts/tGenVar/dicast/result/SAMPLE_REF/SAMPLE.decast_input.csv"

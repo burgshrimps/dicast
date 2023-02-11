@@ -201,6 +201,7 @@ class Dicast:
         # For each variant add caller support
         for i in range(len(self.variants['method'].unique())):
             self.variants['qual_' + str(i+1) + '_caller_support'] = self.variants.apply(lambda x: self.check_caller_support(x[['qual_' + method for method in methods]], i+1), axis=1)
+            self.variants['qual_' + str(i+1) + '_caller_support'] = self.variants['qual_' + str(i+1) + '_caller_support'].apply(lambda x: np.round(x, 2))
 
 
     def train(self):
@@ -249,6 +250,7 @@ class Dicast:
 
         self.variants['pred_dicast'] = self.model.predict(X)
         self.variants['qual_dicast'] = self.model.predict_proba(X)[:, 1]
+        self.variants['qual_dicast'] = self.variants['qual_dicast'].apply(lambda x: np.round(x, 2))
 
 
     def save_curation(self):
@@ -260,23 +262,28 @@ class Dicast:
                                            'pred_dicast'] + qual_cols].copy().reset_index(drop=True)
 
         # Determine which variants are sent for curation
-        variants_curation_fp = variants_curation[(variants_curation['confirmed'] == 0) & ((variants_curation['qual_dicast'] > 0.4) | (variants_curation['qual_1_caller_support'] > 0.4) | (variants_curation['qual_2_caller_support'] > 0.1))].copy().reset_index(drop=True)
-        variants_curation_fn = variants_curation[(variants_curation['confirmed'] == 1) & (variants_curation['qual_dicast'] < 0.4)].copy().reset_index(drop=True)
-        variants_curation = pd.concat([variants_curation_fp, variants_curation_fn], ignore_index=True)
-        logging.info(f'# Sending {len(variants_curation)} SVs from {self.chr_incl[0]} for manual curation')
+        variants_curation_fp = variants_curation[(variants_curation['confirmed'] == 0) & (variants_curation['qual_dicast'] > 0.5)].copy().reset_index(drop=True)
+        variants_curation_fn = variants_curation[(variants_curation['confirmed'] == 1) & (variants_curation['qual_dicast'] < 0.5)].copy().reset_index(drop=True)
+        logging.info(f'# Sending {len(variants_curation_fp)} FP and {len(variants_curation_fn)} FN and SVs from {self.chr_incl[0]} for manual curation')
         
         for cohort in self.params:
             ref = self.params[cohort]['ref']
             for sample in self.params[cohort]['samples']:
-                variants_curation_sample = variants_curation[variants_curation['sample'] == sample].copy().reset_index(drop=True)
+                variants_curation_sample_fp = variants_curation_fp[variants_curation_fp['sample'] == sample].copy().reset_index(drop=True)
+                variants_curation_sample_fn = variants_curation_fn[variants_curation_fn['sample'] == sample].copy().reset_index(drop=True)
 
                 workdir_root_sample = replace_filename(self.params[cohort]['workdir'], sample, ref)
-                workdir_sample = workdir_root_sample + '/' + self.type + '/' + self.chr_incl[0]
-                if not os.path.exists(workdir_sample):
-                    os.makedirs(workdir_sample)
+                workdir_sample_fp = workdir_root_sample + '/FP/' + self.type + '/' + self.chr_incl[0]
+                workdir_sample_fn = workdir_root_sample + '/FN/' + self.type + '/' + self.chr_incl[0]
+                if not os.path.exists(workdir_sample_fp):
+                    os.makedirs(workdir_sample_fp)
+                if not os.path.exists(workdir_sample_fn):
+                    os.makedirs(workdir_sample_fn)
 
-                filename_sample = '_'.join([datetime.today().strftime('%Y%m%d'), sample, self.type, self.chr_incl[0]]) + '.tsv'
-                variants_curation_sample.to_csv('/'.join([workdir_sample, filename_sample]), sep='\t', index=False, na_rep='NA')
+                filename_sample_fp = '_'.join([datetime.today().strftime('%Y%m%d'), sample, 'FP', self.type, self.chr_incl[0]]) + '.tsv'
+                filename_sample_fn = '_'.join([datetime.today().strftime('%Y%m%d'), sample, 'FN', self.type, self.chr_incl[0]]) + '.tsv'
+                variants_curation_sample_fp.to_csv('/'.join([workdir_sample_fp, filename_sample_fp]), sep='\t', index=False, na_rep='NA')
+                variants_curation_sample_fn.to_csv('/'.join([workdir_sample_fn, filename_sample_fn]), sep='\t', index=False, na_rep='NA')
 
         
     def save_predictions_tsv(self, out_file):
