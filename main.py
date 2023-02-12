@@ -12,6 +12,8 @@ from lib.prepare import VariantPrep
 from lib.collect_reference import ReferenceAnnotator
 from lib.collect_illumina import AlignmentAnnotatorIllumina
 from lib.model import Dicast
+import os
+import re
 
 # List of chromosomes to process
 CHROMS = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 
@@ -179,26 +181,36 @@ if __name__ == '__main__':
     elif arguments.command == 'predict':
 
         logging.info('MODE: test')
-        logging.info(f'TYPE: {arguments.svtype}')
-        logging.info(f'MODEL INPUT: {arguments.clf}')
+        logging.info(f'MODEL INPUT: {arguments.clfdir}')
         logging.info(f'PARAMS: {arguments.params}')
         logging.info(f'PREDICTIONS OUTPUT: {arguments.output}')
         print('')
         params = read_parameters(arguments.params)
-        dicast = Dicast('predict', arguments.svtype, params, pkl=arguments.clf)
-        logging.info('# Load Data')
-        dicast.load_data()
-        logging.info('# Load Model')
-        dicast.load_model()
-        logging.info('# Predict')
-        dicast.predict()
+        print(params)
+        print(arguments)
+        l_pred = []
+        for file in os.listdir(arguments.clfdir):
+            if file.endswith(".pkl"):
+                saved_model = os.path.join(arguments.clfdir , file)
+                logging.info(f'READING FILE: {saved_model}')
+                if len(re.split(r'[_\.]', file)) != 3:
+                    logging.info('ERROR: model name must be in the format <model>_<svtype>.pkl')
+                    exit()
+                model, svtype, _ = re.split(r'[_\.]', file)
+                dicast = Dicast('predict', svtype, params, pkl=saved_model)
+                logging.info('# Load Data')
+                dicast.load_data()
+                logging.info('# Load Model')
+                dicast.load_model()
+                logging.info('# Predict')
+                dicast.predict()
+                l_pred.append(dicast.variants)
         logging.info('# Save Predictions')
-        dicast.save_predictions_tsv(arguments.output)
+        dicast.save_predictions_tsv(arguments.output, pd.concat(l_pred))
         logging.info('# add prediction value to vcf file')
-        dicast.add_predictions_to_vcf()
+        dicast.add_predictions_to_vcf(pd.concat(l_pred))
 
     elif arguments.command == 'curate':
-
         logging.info('MODE: curate')
         logging.info(f'TYPE: {arguments.svtype}')
         logging.info(f'CLASSIFIER: {arguments.clfname}')
@@ -210,7 +222,6 @@ if __name__ == '__main__':
         clfparams = read_parameters(arguments.clfparams)
 
         Parallel(n_jobs=len(CHROMS))(delayed(create_manual_curation_set)(chrom) for chrom in CHROMS)
-
     else:
         raise ValueError('Invalid command')
 

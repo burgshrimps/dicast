@@ -27,8 +27,7 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_test.add_argument('--chr_incl', help='Chromsomes to include for testing', nargs='+', default=['all'])
 
     parser_predict = subparsers.add_parser('predict', help='Make predictions for a set of variants')
-    parser_predict.add_argument('svtype', help='SV type to make predictions for')
-    parser_predict.add_argument('clf', help='Input file to load the model from')
+    parser_predict.add_argument('clfdir', help='Path to the directory containing the models')
     parser_predict.add_argument('params', help='Prediction parameter file')
     parser_predict.add_argument('output', help='Output file to save the predictions')
 
