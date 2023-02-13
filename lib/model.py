@@ -10,6 +10,7 @@ import os
 import pysam
 import pathlib
 from lib.utils import replace_filename
+import sys
 
 class Dicast:
     """ Class to train a model. """
@@ -286,14 +287,15 @@ class Dicast:
                 variants_curation_sample_fn.to_csv('/'.join([workdir_sample_fn, filename_sample_fn]), sep='\t', index=False, na_rep='NA')
 
         
-    def save_predictions_tsv(self, out_file):
+    def save_predictions_tsv(self, output_file, concatinated_dfs):
         """ Save predictions. """
+        abs_path = os.path.abspath(output_file)
+        logging.info(f'# Saving predictions to {abs_path}')
+        concatinated_dfs[['id', 'sample', 'tech', 'method', 'type', 'chrom', 'chrom2', 'start', 'end', 'size', 
+                       'filter', 'qual', 'pred_dicast', 'qual_dicast']].to_csv( output_file , sep='\t', index=False, na_rep='NA')
 
-        self.variants[['id', 'sample', 'tech', 'method', 'type', 'chrom', 'chrom2', 'start', 'end', 'size', 
-                       'filter', 'qual', 'pred_dicast', 'qual_dicast']].to_csv(out_file, sep='\t', index=False, na_rep='NA')
 
-
-    def add_predictions_to_vcf(self):
+    def add_predictions_to_vcf(self, df_variants):
         """ Add predictions to VCF. """
         l_vcfsnames = []
         for cohort in self.params:
@@ -307,18 +309,20 @@ class Dicast:
                             logging.error(f'VCF file {filename} does not exist')
                             sys.exit(1)
                         l_vcfsnames += [(vcf,filename)]
-        for method, path in l_vcfsnames:
+        for _, path in l_vcfsnames:
             input = pysam.VariantFile(path, 'r')
             input.header.info.add("DICAST", number="1", type="String", description="Dicast prediction score")
-            output = pysam.VariantFile(path.replace('.vcf.gz','.dicast.vcf.gz'), 'w', header=input.header)
+            new_vcf = path.replace('.vcf.gz','.dicast.vcf.gz')
+            output = pysam.VariantFile(new_vcf, 'w', header=input.header)
             for record in input.fetch():
-                if record.id in self.variants['id'].values:
-                    record.info['DICAST'] = str(self.variants[self.variants['id'] == record.id]['qual_dicast'].values[0])
+                if record.id in df_variants['id'].values:
+                    record.info['DICAST'] = str(df_variants[df_variants['id'] == record.id]['qual_dicast'].values[0])
                 else:
                     record.info['DICAST'] = '-1'
                 output.write(record)
 
             input.close()
+            logging.info(f'VCF file {new_vcf} has been updated with DICAST predictions')
             output.close()
 
     def save_test(self, out_root):
