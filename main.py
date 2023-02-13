@@ -5,15 +5,17 @@ from joblib import Parallel, delayed
 import pandas as pd
 from glob import glob
 from tqdm import tqdm
+import os
+import re
+from datetime import datetime
 
 from lib.parsing import parse_arguments
-from lib.utils import read_parameters
+from lib.utils import read_parameters, replace_filename
 from lib.prepare import VariantPrep
 from lib.collect_reference import ReferenceAnnotator
 from lib.collect_illumina import AlignmentAnnotatorIllumina
 from lib.model import Dicast
-import os
-import re
+
 
 # List of chromosomes to process
 CHROMS = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 
@@ -57,16 +59,60 @@ def combine_feature_files(sample, ref, workdir):
 def create_manual_curation_set(chrom):
     """ Create a set of SVs for manual curation. Train on all chromosomes except the current one and then test on the current one.
     
-    param chrom: Chromosome name """
+    param chrom: Chromosome name 
+    return curation set: pandas dataframe with SVs for manual curation """
 
     dicast = Dicast('curate', arguments.svtype, params, clf=arguments.clfname, clfparams=clfparams, chr_excl=[chrom], chr_incl=[chrom])
     dicast.load_data()
     dicast.train()
     dicast.predict()
     dicast.compute_qual()
-    dicast.save_curation()
     print('Finished chromosome {0}'.format(chrom))
+    return dicast.get_curation_set()
 
+
+def save_manual_curation_set(df, params, chunk_size=200):
+    """ Splits manual curation dataframe into chunks and saves them to disk.
+
+    param df: Manual curation dataframe
+    param params: Parameters
+    param chunk_size: Number of SVs per chunk """
+
+    for cohort in params:
+        ref = params[cohort]['ref']
+
+        for sample in params[cohort]['samples']:
+            df_sample = df.loc[(df['sample'] == sample)].copy().reset_index(drop=True)
+            df_sample_fp = df_sample[df_sample['err_type'] == 'FP'].copy().reset_index(drop=True)
+            df_sample_fn = df_sample[df_sample['err_type'] == 'FN'].copy().reset_index(drop=True)
+
+            workdir_root_sample = replace_filename(params[cohort]['workdir'], sample, ref)
+
+            # Save False Positives
+            chunk_fp = 0
+            for i in range(0, len(df_sample_fp), chunk_size):
+                workdir_sample_fp_chunk = workdir_root_sample + '/FP/' + arguments.svtype + '/chunk' + str(chunk_fp)
+                filename_sample_fp_chunk = '_'.join([datetime.today().strftime('%Y%m%d'), sample, 'FP', arguments.svtype, 'chunk' + str(chunk_fp)]) + '.tsv'
+                if not os.path.exists(workdir_sample_fp_chunk):
+                    os.makedirs(workdir_sample_fp_chunk)
+
+                df_sample_fp_chunk = df_sample_fp.iloc[i:i+chunk_size].copy().reset_index(drop=True)
+                df_sample_fp_chunk.to_csv('/'.join([workdir_sample_fp_chunk, filename_sample_fp_chunk]), sep='\t', index=False, na_rep='NA')
+
+                chunk_fp += 1
+
+            # Save False Negatives
+            chunk_fn = 0
+            for i in range(0, len(df_sample_fn), chunk_size):
+                workdir_sample_fn_chunk = workdir_root_sample + '/FN/' + arguments.svtype + '/chunk' + str(chunk_fn)
+                filename_sample_fn_chunk = '_'.join([datetime.today().strftime('%Y%m%d'), sample, 'FN', arguments.svtype, 'chunk' + str(chunk_fn)]) + '.tsv'
+                if not os.path.exists(workdir_sample_fn_chunk):
+                    os.makedirs(workdir_sample_fn_chunk)
+
+                df_sample_fn_chunk = df_sample_fn.iloc[i:i+chunk_size].copy().reset_index(drop=True)
+                df_sample_fn_chunk.to_csv('/'.join([workdir_sample_fn_chunk, filename_sample_fn_chunk]), sep='\t', index=False, na_rep='NA')
+
+                chunk_fn += 1
 
 if __name__ == '__main__':
 
@@ -221,7 +267,9 @@ if __name__ == '__main__':
         params = read_parameters(arguments.params)
         clfparams = read_parameters(arguments.clfparams)
 
-        Parallel(n_jobs=len(CHROMS))(delayed(create_manual_curation_set)(chrom) for chrom in CHROMS)
+        curation_set = Parallel(n_jobs=len(CHROMS))(delayed(create_manual_curation_set)(chrom) for chrom in CHROMS)
+        curation_set = pd.concat(curation_set, ignore_index=True)
+        save_manual_curation_set(curation_set, params)
     else:
         raise ValueError('Invalid command')
 

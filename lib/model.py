@@ -254,7 +254,7 @@ class Dicast:
         self.variants['qual_dicast'] = self.variants['qual_dicast'].apply(lambda x: np.round(x, 2))
 
 
-    def save_curation(self):
+    def get_curation_set(self):
         """ Save curation SVs. """
 
         qual_cols = [col for col in self.variants.columns if col.startswith('qual_')]
@@ -265,26 +265,13 @@ class Dicast:
         # Determine which variants are sent for curation
         variants_curation_fp = variants_curation[(variants_curation['confirmed'] == 0) & (variants_curation['qual_dicast'] > 0.5)].copy().reset_index(drop=True)
         variants_curation_fn = variants_curation[(variants_curation['confirmed'] == 1) & (variants_curation['qual_dicast'] < 0.5)].copy().reset_index(drop=True)
+        variants_curation_fp['err_type'] = 'FP'
+        variants_curation_fn['err_type'] = 'FN'
+        variants_curation = pd.concat([variants_curation_fp, variants_curation_fn], ignore_index=True)
+
         logging.info(f'# Sending {len(variants_curation_fp)} FP and {len(variants_curation_fn)} FN and SVs from {self.chr_incl[0]} for manual curation')
         
-        for cohort in self.params:
-            ref = self.params[cohort]['ref']
-            for sample in self.params[cohort]['samples']:
-                variants_curation_sample_fp = variants_curation_fp[variants_curation_fp['sample'] == sample].copy().reset_index(drop=True)
-                variants_curation_sample_fn = variants_curation_fn[variants_curation_fn['sample'] == sample].copy().reset_index(drop=True)
-
-                workdir_root_sample = replace_filename(self.params[cohort]['workdir'], sample, ref)
-                workdir_sample_fp = workdir_root_sample + '/FP/' + self.type + '/' + self.chr_incl[0]
-                workdir_sample_fn = workdir_root_sample + '/FN/' + self.type + '/' + self.chr_incl[0]
-                if not os.path.exists(workdir_sample_fp):
-                    os.makedirs(workdir_sample_fp)
-                if not os.path.exists(workdir_sample_fn):
-                    os.makedirs(workdir_sample_fn)
-
-                filename_sample_fp = '_'.join([datetime.today().strftime('%Y%m%d'), sample, 'FP', self.type, self.chr_incl[0]]) + '.tsv'
-                filename_sample_fn = '_'.join([datetime.today().strftime('%Y%m%d'), sample, 'FN', self.type, self.chr_incl[0]]) + '.tsv'
-                variants_curation_sample_fp.to_csv('/'.join([workdir_sample_fp, filename_sample_fp]), sep='\t', index=False, na_rep='NA')
-                variants_curation_sample_fn.to_csv('/'.join([workdir_sample_fn, filename_sample_fn]), sep='\t', index=False, na_rep='NA')
+        return variants_curation
 
         
     def save_predictions_tsv(self, output_file, concatinated_dfs):
