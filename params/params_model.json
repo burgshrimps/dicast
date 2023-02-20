@@ -8,5 +8,16 @@
             "n_estimators" : 100,
             "random_state" : 0
         }
+    },
+    
+"RF_100" :
+    {
+        "classifier" : "RandomForestClassifier",
+        "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models/RF_100",
+        "parameters" : 
+        {
+            "n_estimators" : 100,
+            "random_state" : 0
+        }
     }
 }

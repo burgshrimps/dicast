@@ -15,7 +15,7 @@ import sys
 class Dicast:
     """ Class to train a model. """
 
-    def __init__(self, mode, svtype, params, pkl=None, clf=None, clfparams=None, chr_excl=[], chr_incl=['all']):
+    def __init__(self, mode, svtype, params, pkl=None, clf=None, clfparams=None, chr_excl=[], chr_incl=['all'], incl_cur=False):
         """ Initialize class. 
         
         param mode: string, 'train', 'test' or 'predict'
@@ -24,13 +24,15 @@ class Dicast:
         param params: dictionary, parameters including location of data 
         param clf: string, classifier name
         param chr_excl: list, chromosomes to exclude
-        param chr_incl: list, chromosomes to include """
+        param chr_incl: list, chromosomes to include 
+        param incl_cur: boolean, correct curated variants in training data """
 
         self.mode = mode
         self.type = svtype.upper()
         self.params = params
         self.chr_excl = chr_excl
         self.chr_incl = chr_incl
+        self.incl_cur = incl_cur
 
         if pkl != None:
             self.pkl = pkl
@@ -40,7 +42,7 @@ class Dicast:
             self.clfparams = clfparams[clf]
 
 
-    def load_sample(self, sample, ref, variant_features, variant_labels=None):
+    def load_sample(self, sample, ref, variant_features, variant_labels=None, variant_curated=None):
         """ Load sample data. 
         
         param sample: string, sample name 
@@ -78,6 +80,24 @@ class Dicast:
                 if df_features.loc[i, 'id'] in confirmed_ids[df_features.loc[i, 'method']]:
                     df_features.loc[i, 'confirmed'] = 1 
 
+            # Load variant curation
+            if variant_curated != None:
+                filename_curated = replace_filename(variant_curated, sample, ref)
+                df_curated = pd.read_csv(filename_curated, low_memory=False, sep='\t') 
+
+                confirmed_ids_cur = defaultdict(list)
+                unconfirmed_ids_cur = defaultdict(list)
+                for method in methods:
+                    df_curated_method = df_curated[df_curated['method'] == method].copy().reset_index(drop=True)
+                    confirmed_ids_cur[method] = df_curated_method[df_curated_method['Confirmed (Consensus)'] == 1]['id'].tolist()
+                    unconfirmed_ids_cur[method] = df_curated_method[df_curated_method['Confirmed (Consensus)'] == 0]['id'].tolist()
+
+                for i in range(len(df_features)):
+                    if df_features.loc[i, 'id'] in confirmed_ids_cur[df_features.loc[i, 'method']]:
+                        df_features.loc[i, 'confirmed'] = 1
+                    elif df_features.loc[i, 'id'] in unconfirmed_ids_cur[df_features.loc[i, 'method']]:
+                        df_features.loc[i, 'confirmed'] = 0
+
         return df_features
 
 
@@ -94,7 +114,13 @@ class Dicast:
         if self.mode == 'train' or self.mode == 'test' or self.mode == 'curate':
             variant_labels = self.params[cohort]['variant_labels']
             for sample in samples:
-                sample_df = self.load_sample(sample, ref, variant_features, variant_labels=variant_labels)
+                
+                if self.incl_cur:
+                    variant_curated = self.params[cohort]['variant_curation']
+                    sample_df = self.load_sample(sample, ref, variant_features, variant_labels=variant_labels, variant_curated=variant_curated)
+                else:
+                    sample_df = self.load_sample(sample, ref, variant_features, variant_labels=variant_labels)
+                
                 sample_dfs.append(sample_df)
 
         elif self.mode == 'predict':

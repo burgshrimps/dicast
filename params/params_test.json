@@ -5,6 +5,6 @@
         "ref" : "hg38",
         "variant_features" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/ensemble/SAMPLE_REF.SVs.annot.tsv",
         "variant_labels" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/SAMPLE.decast_input.csv",
-        "variant_curation" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/curation/20230213_SAMPLE_REF.SVs.curated.tsv"
+        "variant_curation" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/curation/SAMPLE_REF.SVs.curated.tsv"
     }
 }

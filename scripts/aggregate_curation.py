@@ -45,13 +45,13 @@ def aggregate_curation(sample, ref, date, directory, curators):
         curation_df['Confirmed (Consensus)'] = curation_df[curator_cols].apply(consensus_curate, axis=1)
     else:
         curation_df['Confirmed (Consensus)'] = curation_df[curator_cols[0]]
+    curation_df.to_csv(directory + '/' + sample + '_' + ref + '.SVs.curated.tsv', sep='\t', index=False)
     curation_df.to_csv(directory + '/' + date + '_' + sample + '_' + ref + '.SVs.curated.tsv', sep='\t', index=False)
 
 
 date = sys.argv[1]
 ref = 'hg38'
 samples = ['17-08', '146-97', '176-98', '906-02', '18-5047']
-samples = ['146-97', '176-98', '906-02', '18-5047']
 curators = ['Nico', 'Uira', 'Jakob', 'Hossein', 'Maryam']
 directory = '/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/curation'
 

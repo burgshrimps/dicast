@@ -38,5 +38,6 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_curate.add_argument('params', help='Curation parameter file')
     parser_curate.add_argument('clfparams', help='Model parameter file')
     parser_curate.add_argument('clfname', help='Name of model to train')
+    parser_curate.add_argument('--cur', help='Use this flag to change the labels of variants from manual curation', action=argparse.BooleanOptionalAction, default=False)
 
     return parser.parse_args(arguments)
