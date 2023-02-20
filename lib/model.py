@@ -354,5 +354,8 @@ class Dicast:
     def save_model(self):
         """ Save model. """
 
+        if not os.path.exists('/'.join(self.pkl.split('/')[:-1])):
+            os.makedirs('/'.join(self.pkl.split('/')[:-1]))
+
         with open(self.pkl, 'wb') as f:
             pickle.dump(self.model, f)
