@@ -1,8 +1,8 @@
 {
-"RF" :
+"RF_raw_100" :
     {
         "classifier" : "RandomForestClassifier",
-        "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models",
+        "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models/RF_raw_100",
         "parameters" : 
         {
             "n_estimators" : 100,

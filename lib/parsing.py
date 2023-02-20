@@ -18,6 +18,7 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_train.add_argument('clfparams', help='Model parameter file')
     parser_train.add_argument('clfname', help='Name of model to train')
     parser_train.add_argument('--chr_excl', help='Chromsomes to exclude from training', nargs='+', default=[])
+    parser_train.add_argument('--cur', help='Use this flag to change the labels of variants from manual curation', action=argparse.BooleanOptionalAction, default=False)
 
     parser_test = subparsers.add_parser('test', help='Test a model')
     parser_test.add_argument('svtype', help='SV type to test the model for')
@@ -25,6 +26,7 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_test.add_argument('params', help='Test parameter file')
     parser_test.add_argument('workdir', help='Working and output directory')
     parser_test.add_argument('--chr_incl', help='Chromsomes to include for testing', nargs='+', default=['all'])
+    parser_test.add_argument('--cur', help='Use this flag to change the labels of variants from manual curation', action=argparse.BooleanOptionalAction, default=False)
 
     parser_predict = subparsers.add_parser('predict', help='Make predictions for a set of variants')
     parser_predict.add_argument('clfdir', help='Path to the directory containing the models')

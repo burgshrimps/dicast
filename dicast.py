@@ -86,7 +86,7 @@ def save_manual_curation_set(df, params, chunk_size=200):
             df_sample_fp = df_sample[df_sample['err_type'] == 'FP'].copy().reset_index(drop=True)
             df_sample_fn = df_sample[df_sample['err_type'] == 'FN'].copy().reset_index(drop=True)
 
-            workdir_root_sample = replace_filename(params[cohort]['workdir'], sample, ref)
+            workdir_root_sample = replace_filename(params[cohort]['variant_curation'], sample, ref)
 
             # Save False Positives
             chunk_fp = 0
@@ -143,7 +143,7 @@ if __name__ == '__main__':
         
         params = read_parameters(arguments.params)
         
-        VP = VariantPrep(arguments.sample, arguments.ref, params, arguments.workdir)
+        VP = VariantPrep(arguments.sample, arguments.ref, params, arguments.workdir, CHROMS)
         logging.info('# Read Variants')
         VP.read_variants() 
         logging.info('# Filter Variants')
@@ -187,6 +187,7 @@ if __name__ == '__main__':
         logging.info(f'CLASSIFIER PARAMS: {arguments.clfparams}')
         logging.info(f'PARAMS: {arguments.params}')
         logging.info(f'EXCLUDED CHROMS: {arguments.chr_excl}')
+        logging.info(f'CURATION: {arguments.cur}')
         print('')
 
         params = read_parameters(arguments.params)

@@ -10,7 +10,7 @@ from lib.utils import replace_filename
 class VariantPrep:
     """ Class to prepare raw variant calls for feature extraction. """
 
-    def __init__(self, sample, ref, params, workdir):
+    def __init__(self, sample, ref, params, workdir, chroms):
         """ Initialize class. """
 
         # Input parameters
@@ -33,7 +33,7 @@ class VariantPrep:
         self.out_file = '/'.join([self.out_dir, self.out_filename])
 
         # List of chromosomes to use
-        self.chroms = params['chroms']
+        self.chroms = chroms
 
 
     def parse_vcf(self, vcf, tech, method, sample):
