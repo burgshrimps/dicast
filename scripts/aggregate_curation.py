@@ -17,7 +17,7 @@ def consensus_curate(votes):
         return 0
 
 
-def aggregate_curation(sample, date, directory, curators):
+def aggregate_curation(sample, ref, date, directory, curators):
     """ Aggregates the curation votes for each chunk and does consensus voting.
 
     param sample: The sample name.
@@ -45,7 +45,7 @@ def aggregate_curation(sample, date, directory, curators):
         curation_df['Confirmed (Consensus)'] = curation_df[curator_cols].apply(consensus_curate, axis=1)
     else:
         curation_df['Confirmed (Consensus)'] = curation_df[curator_cols[0]]
-    curation_df.to_csv(directory + '/' + date + '_' + sample + '_curated.tsv', sep='\t', index=False)
+    curation_df.to_csv(directory + '/' + date + '_' + sample + '_' + ref + '.SVs.curated.tsv', sep='\t', index=False)
 
 
 date = sys.argv[1]
@@ -56,5 +56,5 @@ curators = ['Nico', 'Uira', 'Jakob', 'Hossein', 'Maryam']
 directory = '/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/curation'
 
 for sample in samples:
-    aggregate_curation(sample, date, directory.replace('SAMPLE', sample).replace('REF', ref), curators)
+    aggregate_curation(sample, ref, date, directory.replace('SAMPLE', sample).replace('REF', ref), curators)
 
