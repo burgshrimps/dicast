@@ -1,0 +1,97 @@
+{
+    "DEL": {
+        "samples": [
+            "17-08",
+            "176-98",
+            "146-97",
+            "18-5047"
+        ],
+        "techs": [
+            "ill"
+        ],
+        "methods": [
+            "delly",
+            "lumpy",
+            "manta"
+        ],
+        "num_svs": 100835,
+        "num_nas": 7809,
+        "curation": true,
+        "chr_excl": [],
+        "params": {
+            "n_estimators": 100,
+            "random_state": 0
+        }
+    },
+    "INS": {
+        "samples": [
+            "17-08",
+            "18-5047",
+            "146-97",
+            "176-98"
+        ],
+        "techs": [
+            "ill"
+        ],
+        "methods": [
+            "delly",
+            "manta"
+        ],
+        "num_svs": 20159,
+        "num_nas": 3004,
+        "curation": true,
+        "chr_excl": [],
+        "params": {
+            "n_estimators": 100,
+            "random_state": 0
+        }
+    },
+    "INV": {
+        "samples": [
+            "17-08",
+            "176-98",
+            "146-97",
+            "18-5047"
+        ],
+        "techs": [
+            "ill"
+        ],
+        "methods": [
+            "delly",
+            "lumpy",
+            "manta"
+        ],
+        "num_svs": 14769,
+        "num_nas": 1539,
+        "curation": true,
+        "chr_excl": [],
+        "params": {
+            "n_estimators": 100,
+            "random_state": 0
+        }
+    },
+    "DUP": {
+        "samples": [
+            "17-08",
+            "176-98",
+            "146-97",
+            "18-5047"
+        ],
+        "techs": [
+            "ill"
+        ],
+        "methods": [
+            "delly",
+            "manta",
+            "lumpy"
+        ],
+        "num_svs": 46267,
+        "num_nas": 8342,
+        "curation": true,
+        "chr_excl": [],
+        "params": {
+            "n_estimators": 100,
+            "random_state": 0
+        }
+    }
+}
