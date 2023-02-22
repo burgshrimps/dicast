@@ -274,6 +274,7 @@ class Dicast:
 
         # Check how many variants are excluded due to missing feature values
         num_svs = len(self.variants)
+        variants_na = self.variants[self.variants[features].isna().any(axis=1)].copy().reset_index(drop=True)
         self.variants = self.variants.dropna(subset=features).copy().reset_index(drop=True)
         logging.info(f'# Dropped {num_svs - len(self.variants)}/{num_svs} SVs due to missing feature values')
 
@@ -282,6 +283,15 @@ class Dicast:
         self.variants['pred_dicast'] = self.model.predict(X)
         self.variants['qual_dicast'] = self.model.predict_proba(X)[:, 1]
         self.variants['qual_dicast'] = self.variants['qual_dicast'].apply(lambda x: np.round(x, 2))
+
+        variants_na['pred_dicast'] = 0
+        variants_na['qual_dicast'] = 0
+
+        # Add back variants that were excluded due to missing feature values
+        if len(variants_na) > 0:
+            self.variants = pd.concat([self.variants, variants_na], ignore_index=True)
+        
+
 
 
     def get_curation_set(self):
@@ -342,10 +352,19 @@ class Dicast:
             logging.info(f'VCF file {new_vcf} has been updated with DICAST predictions')
             output.close()
 
-    def save_test(self, out_root):
+
+    def save_test(self):
         """ Save test result. """
 
-        self.variants.to_csv(out_root + '/test.tsv', sep='\t', index=False, na_rep='NA')
+        model_dir = '/'.join(self.pkl.split('/')[:-1])
+        eval_dir = model_dir + '/eval'
+
+        if not os.path.exists(eval_dir):
+            os.makedirs(eval_dir)
+
+        test_file = eval_dir + '/' + self.clf + '_' + self.type + '_eval.tsv'
+        self.variants['model_dicast'] = self.clf
+        self.variants.to_csv(test_file, sep='\t', index=False, na_rep='NA')
 
 
     def load_model(self):

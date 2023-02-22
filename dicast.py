@@ -192,9 +192,9 @@ if __name__ == '__main__':
 
         params = read_parameters(arguments.params)
         clfparams = read_parameters(arguments.clfparams)
-        output = clfparams[arguments.clfname]['directory'] + '/' + arguments.clfname + '_' + arguments.svtype.upper() + '.pkl'
+        model_out = clfparams[arguments.clfname]['directory'] + '/' + arguments.clfname + '_' + arguments.svtype.upper() + '.pkl'
 
-        dicast = Dicast('train', arguments.svtype, params, pkl=output, clf=arguments.clfname, clfparams=clfparams, chr_excl=arguments.chr_excl, incl_cur=arguments.cur)
+        dicast = Dicast('train', arguments.svtype, params, pkl=model_out, clf=arguments.clfname, clfparams=clfparams, chr_excl=arguments.chr_excl, incl_cur=arguments.cur)
         logging.info('# Load Training Data')
         dicast.load_data()
         logging.info('# Train Model')
@@ -206,14 +206,16 @@ if __name__ == '__main__':
 
         logging.info('MODE: test')
         logging.info(f'TYPE: {arguments.svtype}')
-        logging.info(f'MODEL INPUT: {arguments.clf}')
         logging.info(f'PARAMS: {arguments.params}')
         logging.info(f'INCLUDED CHROMS: {arguments.chr_incl}')
         logging.info(f'CURATION: {arguments.cur}')
         print('')
 
         params = read_parameters(arguments.params)
-        dicast = Dicast('test', arguments.svtype, params, pkl=arguments.clf, chr_incl=arguments.chr_incl, incl_cur=arguments.cur)
+        clfparams = read_parameters(arguments.clfparams)
+        model_in = clfparams[arguments.clfname]['directory'] + '/' + arguments.clfname + '_' + arguments.svtype.upper() + '.pkl'
+
+        dicast = Dicast('test', arguments.svtype, params, pkl=model_in, clf=arguments.clfname, clfparams=clfparams, chr_incl=arguments.chr_incl, incl_cur=arguments.cur)
         logging.info('# Load Test Data')
         dicast.load_data()
         logging.info('# Load Model')
@@ -223,7 +225,7 @@ if __name__ == '__main__':
         logging.info('# Compute Quality Scores')
         dicast.compute_qual()
         logging.info('# Save Test Results')
-        dicast.save_test(arguments.workdir)
+        dicast.save_test()
 
 
     elif arguments.command == 'predict':

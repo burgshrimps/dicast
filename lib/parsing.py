@@ -22,9 +22,9 @@ def parse_arguments(arguments = sys.argv[1:]):
 
     parser_test = subparsers.add_parser('test', help='Test a model')
     parser_test.add_argument('svtype', help='SV type to test the model for')
-    parser_test.add_argument('clf', help='Input file to load the model from')
     parser_test.add_argument('params', help='Test parameter file')
-    parser_test.add_argument('workdir', help='Working and output directory')
+    parser_test.add_argument('clfparams', help='Model parameter file')
+    parser_test.add_argument('clfname', help='Name of model to train')
     parser_test.add_argument('--chr_incl', help='Chromsomes to include for testing', nargs='+', default=['all'])
     parser_test.add_argument('--cur', help='Use this flag to change the labels of variants from manual curation', action=argparse.BooleanOptionalAction, default=False)
 
