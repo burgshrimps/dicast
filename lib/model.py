@@ -9,8 +9,11 @@ from datetime import datetime
 import os
 import pysam
 import pathlib
-from lib.utils import replace_filename
 import sys
+import json
+
+from lib.utils import replace_filename
+
 
 class Dicast:
     """ Class to train a model. """
@@ -243,6 +246,7 @@ class Dicast:
         num_svs = len(variants_training)
         variants_training = variants_training.dropna(subset=features).copy().reset_index(drop=True)
         logging.info(f'# Dropped {num_svs - len(variants_training)}/{num_svs} SVs due to missing feature values')
+        self.num_svs_rm_na = len(variants_training)
 
         X = variants_training[features]
         y = variants_training['confirmed']
@@ -354,8 +358,31 @@ class Dicast:
     def save_model(self):
         """ Save model. """
 
-        if not os.path.exists('/'.join(self.pkl.split('/')[:-1])):
-            os.makedirs('/'.join(self.pkl.split('/')[:-1]))
+        # Create model directory if it does not exist
+        model_dir = '/'.join(self.pkl.split('/')[:-1])
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
 
+        # Save metadata in JSON file
+        json_file = model_dir + '/' + self.clf + '_metadata.json'
+        if os.path.exists(json_file):
+            meta = json.load(open(json_file))
+        else:
+            meta = {}
+
+        meta[self.type] = {}
+        meta[self.type]['samples'] = self.variants['sample'].unique().tolist()
+        meta[self.type]['techs'] = self.variants['tech'].unique().tolist()
+        meta[self.type]['methods'] = self.variants['method'].unique().tolist()
+        meta[self.type]['num_svs'] = len(self.variants)
+        meta[self.type]['num_nas'] = len(self.variants) - self.num_svs_rm_na
+        meta[self.type]['curation'] = self.incl_cur
+        meta[self.type]['chr_excl'] = self.chr_excl
+        meta[self.type]['params'] = self.clfparams['parameters']
+        json_object = json.dumps(meta, indent=4)
+        with open(json_file, 'w') as f:
+            f.write(json_object)
+
+        # Save model
         with open(self.pkl, 'wb') as f:
             pickle.dump(self.model, f)
