@@ -23,6 +23,7 @@ It is necessary to run the preparation mode before being able to run dicast in a
 ### Preparation
 This step reads in the VCF files specified in the parameter file and saves their content in the file `<sample>_<ref>.SVs.raw.tsv` inside a directory called `ensemble` within the specified working directory. Features in regards to the genomic context of a variant are saved in the file `<sample>_<ref>.SVs.ref.tsv`. Alignment features are collected in parallel and are written to their respective files with the name `<sample>_<ref>.SVs.aln.<tech>.<chr>.tsv`. Lastly, variant, genomic context, and alignment features are combined into a single output file `<sample>_<ref>.SVs.annot.tsv`.\
 \
+**Command**\
 `python dicast.py [-h] prepare sample ref params workdir`
 Argument | Description | Optional
 --- | --- | ---
