@@ -292,8 +292,6 @@ class Dicast:
             self.variants = pd.concat([self.variants, variants_na], ignore_index=True)
         
 
-
-
     def get_curation_set(self):
         """ Save curation SVs. """
 
@@ -312,45 +310,6 @@ class Dicast:
         logging.info(f'# Sending {len(variants_curation_fp)} FP and {len(variants_curation_fn)} FN and SVs from {self.chr_incl[0]} for manual curation')
         
         return variants_curation
-
-        
-    def save_predictions_tsv(self, output_file, concatinated_dfs):
-        """ Save predictions. """
-        abs_path = os.path.abspath(output_file)
-        logging.info(f'# Saving predictions to {abs_path}')
-        concatinated_dfs[['id', 'sample', 'tech', 'method', 'type', 'chrom', 'chrom2', 'start', 'end', 'size', 
-                       'filter', 'qual', 'pred_dicast', 'qual_dicast']].to_csv( output_file , sep='\t', index=False, na_rep='NA')
-
-
-    def add_predictions_to_vcf(self, df_variants):
-        """ Add predictions to VCF. """
-        l_vcfsnames = []
-        for cohort in self.params:
-            for sample in self.params[cohort]['samples']:
-                for techs in self.params[cohort]['vcf']:
-                    for vcf in self.params[cohort]['vcf'][techs]:
-                        filename = replace_filename(self.params[cohort]['vcf'][techs][vcf], sample, self.params[cohort]['ref'])
-                        if not os.path.exists(filename): 
-                            filename = replace_filename(self.params[cohort]['vcf'][techs][vcf], sample.replace('-','_'), self.params[cohort]['ref'])
-                        if not os.path.exists(filename): # Try to find file in workdir, with a misspellings in sample name
-                            logging.error(f'VCF file {filename} does not exist')
-                            sys.exit(1)
-                        l_vcfsnames += [(vcf,filename)]
-        for _, path in l_vcfsnames:
-            input = pysam.VariantFile(path, 'r')
-            input.header.info.add("DICAST", number="1", type="String", description="Dicast prediction score")
-            new_vcf = path.replace('.vcf.gz','.dicast.vcf.gz')
-            output = pysam.VariantFile(new_vcf, 'w', header=input.header)
-            for record in input.fetch():
-                if record.id in df_variants['id'].values:
-                    record.info['DICAST'] = str(df_variants[df_variants['id'] == record.id]['qual_dicast'].values[0])
-                else:
-                    record.info['DICAST'] = '-1'
-                output.write(record)
-
-            input.close()
-            logging.info(f'VCF file {new_vcf} has been updated with DICAST predictions')
-            output.close()
 
 
     def save_test(self):

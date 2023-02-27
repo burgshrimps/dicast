@@ -8,6 +8,7 @@ from tqdm import tqdm
 import os
 import re
 from datetime import datetime
+from pysam import VariantFile
 
 from lib.parsing import parse_arguments
 from lib.utils import read_parameters, replace_filename
@@ -113,6 +114,57 @@ def save_manual_curation_set(df, params, chunk_size=200):
                 df_sample_fn_chunk.to_csv('/'.join([workdir_sample_fn_chunk, filename_sample_fn_chunk]), sep='\t', index=False, na_rep='NA')
 
                 chunk_fn += 1
+
+
+def save_predictions(workdir, pred):
+    """ Splits dicast prediction dataframe by sample and saves it in workdir. 
+    
+    param workdir: Output directory
+    param pred: Dicast prediction dataframe """
+
+    for sample in pred['sample'].unique():
+        pred_sample = pred.loc[(pred['sample'] == sample)].copy().reset_index(drop=True)
+        pred_sample = pred_sample[['id', 'sample', 'tech', 'method', 'type', 'chrom', 'chrom2', 'start', 'end', 'size', 
+                                   'filter', 'qual', 'pred_dicast', 'qual_dicast']]
+        pred_sample.to_csv('/'.join([workdir, sample + '.dicast.tsv']), sep='\t', index=False, na_rep='NA')
+
+
+def add_predictions_vcf(params, predictions, workdir):
+    """ Adds Dicast predictions as a new INFO field to the VCF file 
+    
+    param params: dictionary, Prediction parameter file
+    param predictions: pandas dataframe, dicast predictions
+    param workdir: Output directory """
+
+    for cohort in params:
+        for sample in params[cohort]['samples']:
+            for tech in params[cohort]['vcf']:
+                for method in params[cohort]['vcf'][tech]:
+
+                    fname_vcf_in = replace_filename(params[cohort]['vcf'][tech][method], sample, params[cohort]['ref'])
+                    if not os.path.exists(fname_vcf_in):
+                        fname_vcf_in = fname_vcf_in.replace(sample, sample.replace('-', '_'))
+                    vcf_in = VariantFile(fname_vcf_in, 'r')
+                    vcf_in.header.info.add("DQ", number="1", type="String", description="Dicast Quality Score")
+
+                    fname_vcf_out = fname_vcf_in.replace('.vcf', '.dicast.vcf').replace('.gz', '')
+                    vcf_out = VariantFile(fname_vcf_out, 'w', header=vcf_in.header)
+                    
+                    variants_subset = predictions.loc[(predictions['sample'] == sample) & (predictions['tech'] == tech) & (predictions['method'] == method)].copy().reset_index(drop=True)
+                    variants_subset = variants_subset[['id', 'qual_dicast']].set_index('id').T.to_dict('list')
+                    for rec in vcf_in.fetch():
+                        if rec.id in variants_subset.keys():
+                            qual_dicast = variants_subset[rec.id][0]
+                        else:
+                            qual_dicast = -1
+
+                        rec.info['DQ'] = str(qual_dicast)
+                        vcf_out.write(rec)
+                    vcf_out.close()
+                    vcf_in.close()
+                    logging.info(f'Added DQ tag to {method} VCF file for sample {sample}')
+
+
 
 if __name__ == '__main__':
 
@@ -231,34 +283,27 @@ if __name__ == '__main__':
     elif arguments.command == 'predict':
 
         logging.info('MODE: test')
-        logging.info(f'MODEL INPUT: {arguments.clfdir}')
         logging.info(f'PARAMS: {arguments.params}')
-        logging.info(f'PREDICTIONS OUTPUT: {arguments.output}')
         print('')
+
         params = read_parameters(arguments.params)
-        print(params)
-        print(arguments)
-        l_pred = []
-        for file in os.listdir(arguments.clfdir):
-            if file.endswith(".pkl"):
-                saved_model = os.path.join(arguments.clfdir , file)
-                logging.info(f'READING FILE: {saved_model}')
-                if len(re.split(r'[_\.]', file)) != 3:
-                    logging.info('ERROR: model name must be in the format <model>_<svtype>.pkl')
-                    exit()
-                model, svtype, _ = re.split(r'[_\.]', file)
-                dicast = Dicast('predict', svtype, params, pkl=saved_model)
-                logging.info('# Load Data')
-                dicast.load_data()
-                logging.info('# Load Model')
-                dicast.load_model()
-                logging.info('# Predict')
-                dicast.predict()
-                l_pred.append(dicast.variants)
+        clfparams = read_parameters(arguments.clfparams)
+        model_dir = clfparams[arguments.clfname]['directory']
+
+        predictions = []
+        for file in glob(model_dir + '/*.pkl'):
+            svtype = file.split('_')[-1].split('.')[0]
+            logging.info(f'Predicting: {svtype}')
+            dicast = Dicast('predict', svtype, params, pkl=file, clf=arguments.clfname, clfparams=clfparams)
+            dicast.load_data()
+            dicast.load_model()
+            dicast.predict()
+            predictions.append(dicast.variants)
         logging.info('# Save Predictions')
-        dicast.save_predictions_tsv(arguments.output, pd.concat(l_pred))
-        logging.info('# add prediction value to vcf file')
-        dicast.add_predictions_to_vcf(pd.concat(l_pred))
+        save_predictions(arguments.workdir, pd.concat(predictions, ignore_index=True))
+
+        if arguments.vcf:
+            add_predictions_vcf(params, pd.concat(predictions, ignore_index=True), arguments.workdir)
 
     elif arguments.command == 'curate':
         logging.info('MODE: curate')

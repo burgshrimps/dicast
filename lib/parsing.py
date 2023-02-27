@@ -29,9 +29,11 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_test.add_argument('--cur', help='Use this flag to change the labels of variants from manual curation', action=argparse.BooleanOptionalAction, default=False)
 
     parser_predict = subparsers.add_parser('predict', help='Make predictions for a set of variants')
-    parser_predict.add_argument('clfdir', help='Path to the directory containing the models')
     parser_predict.add_argument('params', help='Prediction parameter file')
-    parser_predict.add_argument('output', help='Output file to save the predictions')
+    parser_predict.add_argument('clfparams', help='Model parameter file')
+    parser_predict.add_argument('clfname', help='Name of model to train')
+    parser_predict.add_argument('workdir', help='Working and output directory')
+    parser_predict.add_argument('--vcf', help='Additionally add an INFO tag to the input VCF files and save them in workdir', action=argparse.BooleanOptionalAction, default=False)
 
     parser_curate = subparsers.add_parser('curate', help='Generate a set of variants for manual curation')
     parser_curate.add_argument('svtype', help='SV type to curate')
