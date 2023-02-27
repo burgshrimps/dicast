@@ -16,6 +16,7 @@ Usage
 Dicast can be executed in the following way\
 \
 `python dicast.py <mode> <arguments>` \
+\
 test
 
 
