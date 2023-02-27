@@ -13,6 +13,6 @@ There are five modes of operation for dicast.
 
 Usage
 ----------------
-Dicast can be executed in the following way\
+Dicast can be executed in the following way\\
 `python dicast.py <mode> <arguments>`
 
