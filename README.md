@@ -27,6 +27,22 @@ sample | Sample name | No
 ref | Reference genome name (currently only hg38 supported) | No
 params | Preparation parameter file (see below) | No
 workdir | Working and output directory. Dicast will create a folder called ensemble in this directory and save the results of the preparation step there. | No
+```javascript
+"vcf" : 
+    {
+        "ill" :
+        {
+            "delly" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/delly/SAMPLE/variants.bcf",
+            "manta" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/manta/SAMPLE/results/variants/diploidSV_wINV.vcf.gz",
+            "lumpy" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/lumpy/SAMPLE/SAMPLE-smoove.genotyped.vcf.gz"
+        }
+    },
+
+    "bam" : 
+    {
+        "ill": "/confidential/tGenVar/tech/illumina/bam_REF/ill.SAMPLE.REF.bam"
+    }     
+```
 
 ### Training
 `python dicast.py [-h] [--chr_exclude CHR] [--cur] svtype params clfparams clfname workdir`
