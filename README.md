@@ -17,6 +17,5 @@ Dicast can be executed in the following way\
 \
 `python dicast.py <mode> <arguments>` \
 \
-test
-
+It is necessary to run the preparation mode before being able to run dicast in any other mode.
 
