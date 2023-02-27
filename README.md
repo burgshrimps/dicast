@@ -19,12 +19,12 @@ Dicast can be executed in the following way\
 \
 It is necessary to run the preparation mode before being able to run dicast in any other mode.
 
-Arguments
-----------------
 ### Preparation
 `python dicast.py [-h] prepare sample ref params workdir`
 Argument | Description | Optional
 --- | --- | ---
+sample | Sample name | No
+ref | Reference genome name (currently only hg38 supported) | No
 
 
 Parameter Files
