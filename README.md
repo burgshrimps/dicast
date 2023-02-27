@@ -29,8 +29,15 @@ params | Preparation parameter file (see below) | No
 workdir | Working and output directory. Dicast will create a folder called ensemble in this directory and save the results of the preparation step there | No
 
 ### Training
-`python dicast.py [-h] [--chr_exclude CHR] [--cur | --no-cur] svtype params clfparams clfname workdir`
-
+`python dicast.py [-h] [--chr_exclude CHR] [--cur] svtype params clfparams clfname workdir`
+Argument | Description | Optional
+--- | --- | ---
+svtype | SV type to train the model for | No
+params | Training parameter file (see below) | No
+clfparams | Model parameter file (see below) | No
+clfname | Name of the model to train | No
+chr_excl | List of chromosomes to exclude from training separated by space | Yes
+cur | Use this flag to change the labels of variants from manual curation | Yes
 
 Parameter Files
 ----------------
