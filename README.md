@@ -35,7 +35,7 @@ Argument | Description | Optional
 svtype | SV type to train the model for | No
 params | Training parameter file (see below) | No
 clfparams | Model parameter file (see below) | No
-clfname | Name of the model to train | No
+clfname | Name of the model in the parameter file | No
 chr_excl | List of chromosomes to exclude from training separated by space | Yes
 cur | Use this flag to change the labels of variants from manual curation | Yes
 
