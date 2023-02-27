@@ -21,7 +21,8 @@ It is necessary to run the preparation mode before being able to run dicast in a
 
 ### Preparation
 **Command**\
-`python dicast.py [-h] prepare sample ref params workdir`
+`python dicast.py [-h] prepare sample ref params workdir`\
+\
 **Arguments**\
 Argument | Description | Optional
 --- | --- | ---
