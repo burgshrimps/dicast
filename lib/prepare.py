@@ -74,10 +74,7 @@ class VariantPrep:
                 else:
                     vcf_dict['end'].append(rec.stop)
                 try:
-                    if method == 'manta':
-                        vcf_dict['size'].append(rec.info['SVLEN'][0])
-                    else:
-                        vcf_dict['size'].append(rec.info['SVLEN'])
+                    vcf_dict['size'].append(rec.info['SVLEN'])
                 except KeyError:
                     vcf_dict['size'].append(np.nan)
                 vcf_dict['chrom2'].append(np.nan)
