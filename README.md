@@ -20,15 +20,16 @@ Dicast can be executed in the following way\
 It is necessary to run the preparation mode before being able to run dicast in any other mode.
 
 ### Preparation
-`python dicast.py [-h] prepare sample ref params workdir`
+This step reads in the VCF files specified in the parameter file and saves their content the file `<sample>_<ref>.SVs.raw.tsv` inside a directory called `ensemble` within the specified working directory. \
+\
+`python dicast.py [-h] prepare sample ref params workdir` \
+\
 Argument | Description | Optional
 --- | --- | ---
 sample | Sample name | No
 ref | Reference genome name (currently only hg38 supported) | No
 params | Preparation parameter file (see below) | No
 workdir | Working and output directory. Dicast will create a folder called ensemble in this directory and save the results of the preparation step there. | No 
---- | --- | ---
-Dicast will
 
 ### Training
 `python dicast.py [-h] [--chr_exclude CHR] [--cur] svtype params clfparams clfname workdir`
