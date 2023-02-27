@@ -1,6 +1,6 @@
 # Dicast
 
-Dicast is a machine learning-based ensemble structural variant caller for short-read sequencing data. 
+Dicast is a machine learning-based ensemble structural variant caller for short-read sequencing data. The model takes as input a list of variants and outputs the probability of a variant being a true positive call. A typical use case is applying a number of different variant callers on the sequencing data of a sample and then using dicast to decide which variants to keep and which ones to discard.
 
 Modes
 ----------------
