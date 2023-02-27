@@ -29,7 +29,7 @@ Argument | Description | Optional
 sample | Sample name | No
 ref | Reference genome name (currently only hg38 supported) | No
 params | Preparation parameter file (see below) | No
-workdir | Working and output directory. Dicast will create a folder called ensemble in this directory and save the results of the preparation step there. | No
+workdir | Working and output directory. Dicast will create a folder called ensemble in this directory and save the results of the preparation step there. | No \
 **Parameter File**\
 ```javascript
 "vcf" : 
