@@ -34,6 +34,10 @@ workdir | Working and output directory. Dicast will create a folder called ensem
 
 **Parameters:** `params/params_prep.json` \
 The JSON entries under *"ref"* describe the locations of the files containing the reference features for the respective reference genome. Under *"vcf"* there exists one entry for every sequencing technology dicast is applied to. Under every sequencing technology entry there exists an SV caller entry determining the location of the corresponding input VCF file. In the same manner, the location of the input BAM files are declared under *"bam"*. In all entries, *SAMPLE* and *REF* will be replaced with the respective values passed as command line arguments.
+- Reference Feature Files
+  - Reference Name: Name of the reference genome
+    - ...
+  -  
 
 
 ### Training
@@ -50,7 +54,7 @@ clfname | Name of the model in the parameter file | No
 chr_excl | List of chromosomes to exclude from training separated by space | Yes
 cur | Use this flag to change the labels of variants from manual curation, if they were falsely labelled  | Yes
 
-**Parameters:** `params/params_train.json` \
+**Parameters:** `params/params_train.json` 
 - Cohort Name: Describes a group of samples whose file struture is the same
   - Samples: List of samples from this cohort to use for training
   - Reference: Name of the reference genome
