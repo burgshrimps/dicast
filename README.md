@@ -8,7 +8,7 @@ There are five modes of operation for dicast.
 2. **[Training](#training):** Training a new model.
 3. **[Prediction](#prediction):** Use an existing model to make predictions on new data.
 4. **[Evaluation](#evaluation):** Test an existing model.
-5. **[manual Curation](#manual-curation):** Iteratively train and test an existing model to select a subset of variants for manual curation.
+5. **[Manual Curation](#manual-curation):** Iteratively train and test an existing model to select a subset of variants for manual curation.
 
 ## General
 Dicast can be executed in the following way\
