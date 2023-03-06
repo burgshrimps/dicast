@@ -32,7 +32,7 @@ params | Preparation parameter file (see below) | No
 workdir | Working and output directory. Dicast will create a folder called ensemble in this directory and save the results of the preparation step there. | No 
 
 **Parameters** 
-```yaml
+```json
 {
     "ref" : 
     {
