@@ -37,7 +37,13 @@ The JSON entries under *"ref"* describe the locations of the files containing th
 - Reference Feature Files
   - Reference Name: Name of the reference genome
     - ...
-  -  
+- VCF
+  - Technology
+    - SV Caller 1: Location of VCF file 
+    - SV Caller 2: Location of VCF file
+    - ...
+- BAM
+  - Technology: Location of BAM file
 
 
 ### Training
