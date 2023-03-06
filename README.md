@@ -18,12 +18,13 @@ Dicast can be executed in the following way\
 \
 `python dicast.py <mode> <arguments>` \
 \
-It is necessary to run the preparation mode before being able to run dicast in any other mode.
+It is necessary to run the preparation mode before being able to run dicast in any other mode. Example parameter files can be found in `params/`.
 
 ### Preparation
 This step reads in the VCF files specified in the parameter file and saves their content in the file `<sample>_<ref>.SVs.raw.tsv` inside a directory called `ensemble` within the specified working directory. Features in regards to the genomic context of a variant are saved in the file `<sample>_<ref>.SVs.ref.tsv`. Alignment features are collected in parallel and are written to their respective files with the name `<sample>_<ref>.SVs.aln.<tech>.<chr>.tsv`. Lastly, variant, genomic context, and alignment features are combined into a single output file `<sample>_<ref>.SVs.annot.tsv`.\
 \
-**Command:** `python dicast.py [-h] prepare sample ref params workdir`
+**Command:** `python dicast.py [-h] prepare sample ref params workdir` \
+**Example:** `python dicast.py prepare HG002 hg38 params/params_prep.json /path/to/workdir`
 Argument | Description | Optional
 --- | --- | ---
 sample | Sample name | No
@@ -32,32 +33,7 @@ params | Preparation parameter file (see below) | No
 workdir | Working and output directory. Dicast will create a folder called ensemble in this directory and save the results of the preparation step there. | No 
 
 **Parameters** 
-```json
-{
-    "ref" : 
-    {
-        "hg38" : 
-        { 
-            "..." : "...",
-        }
-    },
-
-    "vcf" : 
-    {
-        "ill" :
-        {
-            "delly" : "/path/to/sv_REF/delly/SAMPLE/variants.bcf",
-            "manta" : "/path/to/sv_REF/manta/SAMPLE/results/variants/diploidSV_wINV.vcf.gz",
-            "lumpy" : "/path/to/sv_REF/lumpy/SAMPLE/SAMPLE-smoove.genotyped.vcf.gz"
-        }
-    },
-
-    "bam" : 
-    {
-        "ill": "/path/to/bam_REF/ill.SAMPLE.REF.bam"
-    }     
-}
-```
+The corresponding parameter file 
 
 
 ### Training
