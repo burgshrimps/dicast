@@ -72,7 +72,7 @@ The entry *"samples"* specifies a list of samples one wants to apply dicast to. 
 See above.
 
 ## Evaluation
-This step uses trained models to make predicitons for a set of unseen SVs and subsequently compares the predictions with the ground truth labels. This results of this mode are saved in a directory called `eval` inside the model directory. 
-## Evaluation
+This step uses trained models to make predicitons for a set of unseen SVs and subsequently compares the predictions with the ground truth labels. This results of this mode are saved in a directory called `eval` inside the model directory. For each SV type model a file, <clfname>_<svtype>_eval.tsv is created containing the feature values, quality scores of the input callers as well as the dicast probabilities. This file can be used by the script `scripts/evaluate_model.ipynb` to compute metrics such as precision and recall.
+
 
 
