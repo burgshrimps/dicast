@@ -11,6 +11,9 @@ There are five modes of operation for dicast.
 4. **Evaluation:** Test an existing model.
 5. **Manual Curation:** Iteratively train and test an existing model to select a subset of variants for manual curation.
 
+### Table of Contents
+[Preparation][#preparation]
+
 General
 ----------------
 Dicast can be executed in the following way\
