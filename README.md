@@ -51,8 +51,10 @@ chr_excl | List of chromosomes to exclude from training separated by space | Yes
 cur | Use this flag to change the labels of variants from manual curation, if they were falsely labelled  | Yes
 
 **Parameters:** `params/params_train.json` \
-- Cohort Name: 
-  - Samples: 
+- Cohort Name: Describes a group of samples whose file struture is the same
+  - Samples: List of samples from this cohort to use for training
+  - Reference: Name of the reference genome
+  - Variant Features: Output of dicast prepare
 
 
 
