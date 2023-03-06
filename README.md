@@ -88,7 +88,6 @@ cur | Use this flag to change the labels of variants from manual curation, if th
 **Parameters:** `params/params_test.json` \
 Same format as `params/params_train.json`. \
 \
-\
 **Parameters:** `params/params_model.json` \
 See above.
 
