@@ -95,6 +95,7 @@ See above.
 For a given set of samples and an SV type, this step iteratively trains a model on all but one chromosome and tests the model on the remaining chromosome. Next, inconsistencies between the ground truth labels and the dicast predictions are identified. There are two kinds of inconsistencies:
 1. False Positives (FP): Ground truth says a variant is not confirmed but dicast says it is confirmed
 2. False Negatives (FN): Ground truth says a variant is confirmed but dicast says it is not confirmed
+These inconsistent variants are divided into chunks of 200 SVs and saved in the directory `workdir` specified in the parameter file.
 
 
 
