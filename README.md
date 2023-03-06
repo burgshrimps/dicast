@@ -46,10 +46,10 @@ clfname | Name of the model in the parameter file | No
 chr_excl | List of chromosomes to exclude from training separated by space | Yes
 cur | Use this flag to change the labels of variants from manual curation, if they were falsely labelled  | Yes
 
-**Parameters:** `params/params_train.json` 
+**Parameters:** `params/params_train.json` \
 The training parameter file consists of one or multiple cohort entries. The example parameter file contains one cohort called "tgenvar". A cohort describes a group of samples with the same directory and file structure. The entry *"samples"* is a list of samples used for training a model, *"ref"* is the name of the reference genome, *"variant_features"* is the output from the preparation step, *"variant_labels"* contains the IDs of all confirmed (true positive) variants. Lastly *"variant_curation"* is the output file of the manual curation and contains corrected labels for manually curated SVs. In all entries, *SAMPLE* and *REF* will be replaced with the respective values from *"samples"* and *"ref"*. \
 \
-**Parameters:** `params/params_model.json` 
+**Parameters:** `params/params_model.json` \
 This JSON file contains entries for different models, specified by their name. A corresponding model is selected by specifying the name in the command line argument `clfname`. The entry *"classifier"* describes the type of classifier to train. The entry *"directory"* describes the directory the model is saved in. The entry *"parameters"* describes a number of model-specific parameters.
 
 ## Prediction
@@ -65,10 +65,10 @@ clfname | Name of the model in the parameter file | No
 workdir | Working and output directory | No 
 vcf | Additionally add an INFO tag to the input VCF files and save them in workdir | Yes
 
-**Parameters:** `params/params_predict.json` 
+**Parameters:** `params/params_predict.json` \
 The entry *"samples"* specifies a list of samples one wants to apply dicast to. The entry *"variant_features"* is the output of dicast prepare. Under the entry *"vcf"* the input VCF files are specified in case one wants to add the INFO tag to them. In all entries, *SAMPLE* and *REF* will be replaced with the respective values from *"samples"* and *"ref"*. \
 \
-**Parameters:** `params/params_model.json` 
+**Parameters:** `params/params_model.json` \
 See above.
 
 
