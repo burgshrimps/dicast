@@ -43,7 +43,7 @@ svtype | SV type to train the model for | No
 params | Training parameter file (see below) | No
 clfparams | Model parameter file (see below) | No
 clfname | Name of the model in the parameter file | No
-chr_excl | List of chromosomes to exclude from training separated by space | Yes
+chr_excl | List of chromosomes to exclude from training separated by space (Default: None) | Yes
 cur | Use this flag to change the labels of variants from manual curation, if they were falsely labelled  | Yes
 
 **Parameters:** `params/params_train.json` \
@@ -76,6 +76,14 @@ This step uses trained models to make predicitons for a set of unseen SVs and su
 
 **Command:** `python dicast.py test [-h] [--chr_incl] [--cur] svtype params clfparams clfname` \
 **Example:** `python dicast.py test --cur DEL params/params_test.json params/params_model.json RF_100`
+Argument | Description | Optional
+--- | --- | ---
+svtype | SV type to train the model for | No
+params | Training parameter file (see below) | No
+clfparams | Model parameter file (see below) | No
+clfname | Name of the model in the parameter file | No
+chr_incl | List of chromosomes to include in testing separated by space (Default: All) | Yes
+cur | Use this flag to change the labels of variants from manual curation, if they were falsely labelled  | Yes
 
 
 
