@@ -56,4 +56,7 @@ The training parameter file consists of one or multiple cohort entries. The exam
 **Parameters:** `params/params_model.json` 
 This JSON file contains entries for different models, specified by their name. A corresponding model is selected by specifying the name in the command line argument `clfname`. The entry *"classifier"* describes the type of classifier to train. The entry *"directory"* describes the directory the model is saved in. The entry *"parameters"* describes a number of model-specific parameters.
 
+Prediction
+----------------
+
 
