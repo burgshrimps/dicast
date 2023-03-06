@@ -36,7 +36,7 @@ The JSON entries under *"ref"* describe the locations of the files containing th
 With this step, a new model is trained for a specific SV type. The model will be saved as PKL file in the following format `<clfname>_<svtype>.pkl` in the directory specified in `clfparams` under the corresponding model name. 
 
 **Command:** `python dicast.py train [-h] [--chr_exclude CHR] [--cur] svtype params clfparams clfname` \
-**Example:** `python dicast.py train DEL params/params_train.json params/params_model.json RF_100`
+**Example:** `python dicast.py train --cur DEL params/params_train.json params/params_model.json RF_100`
 Argument | Description | Optional
 --- | --- | ---
 svtype | SV type to train the model for | No
@@ -72,7 +72,10 @@ The entry *"samples"* specifies a list of samples one wants to apply dicast to. 
 See above.
 
 ## Evaluation
-This step uses trained models to make predicitons for a set of unseen SVs and subsequently compares the predictions with the ground truth labels. This results of this mode are saved in a directory called `eval` inside the model directory. For each SV type model a file, `<clfname>_<svtype>_eval.tsv` is created containing the feature values, quality scores of the input callers as well as the dicast probabilities. This file can be used by the script `scripts/evaluate_model.ipynb` to compute metrics such as precision and recall.
+This step uses trained models to make predicitons for a set of unseen SVs and subsequently compares the predictions with the ground truth labels. This results of this mode are saved in a directory called `eval` inside the model directory. For the specified SV type model a file, `<clfname>_<svtype>_eval.tsv` is created containing the feature values, quality scores of the input callers as well as the dicast probabilities. This file can be used by the script `scripts/evaluate_model.ipynb` to compute metrics such as precision and recall.
+
+**Command:** `python dicast.py test [-h] [--chr_incl] [--cur] svtype params clfparams clfname` \
+**Example:** `python dicast.py test --cur DEL params/params_test.json params/params_model.json RF_100`
 
 
 
