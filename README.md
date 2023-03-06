@@ -32,8 +32,8 @@ ref | Reference genome name (currently only hg38 supported) | No
 params | Preparation parameter file (see below) | No
 workdir | Working and output directory. Dicast will create a folder called ensemble in this directory and save the results of the preparation step there. | No 
 
-**Parameters** 
-The corresponding parameter file 
+**Parameters** \
+The JSON entries under *ref* describe the locations of the files containing the reference features for the respective reference genome. 
 
 
 ### Training
