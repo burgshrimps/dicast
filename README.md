@@ -34,24 +34,11 @@ workdir | Working and output directory. Dicast will create a folder called ensem
 **Parameters** 
 ```yaml
 {
-   {
     "ref" : 
     {
         "hg38" : 
         { 
-            "directory" : "/confidential/tGenVar/ref/hg38",
-            "subdirectory_annotation" : "annotation",
-            "filename_chrom_sizes" : "GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.fai",
-            "filename_repeats" : "hg38_repeatmasker.tsv",
-            "filename_vntrs" : "hg38_vntrs_chaisson.bed",
-            "filename_strs" : "hg38_strs_chaisson.bed",
-            "filename_gc" : "hg38_gc_content.bw",
-            "filename_cpgislands" : "hg38_cpg_islands.tsv",
-            "filename_centromeres": "hg38_centromeres.tsv",
-            "filename_asmb_gaps": "hg38_asmb_gaps.tsv",
-            "filename_alt_haps": "hg38_alt_haps.tsv",
-            "filename_genes": "hg38_genes.tsv",
-            "filename_orphanet": "hg38_orphanet.tsv"
+            "..." : "...",
         }
     },
 
@@ -59,17 +46,16 @@ workdir | Working and output directory. Dicast will create a folder called ensem
     {
         "ill" :
         {
-            "delly" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/delly/SAMPLE/variants.bcf",
-            "manta" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/manta/SAMPLE/results/variants/diploidSV_wINV.vcf.gz",
-            "lumpy" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/lumpy/SAMPLE/SAMPLE-smoove.genotyped.vcf.gz"
+            "delly" : "/path/to/sv_REF/delly/SAMPLE/variants.bcf",
+            "manta" : "/path/to/sv_REF/manta/SAMPLE/results/variants/diploidSV_wINV.vcf.gz",
+            "lumpy" : "/path/to/sv_REF/lumpy/SAMPLE/SAMPLE-smoove.genotyped.vcf.gz"
         }
     },
 
     "bam" : 
     {
-        "ill": "/confidential/tGenVar/tech/illumina/bam_REF/ill.SAMPLE.REF.bam"
+        "ill": "/path/to/bam_REF/ill.SAMPLE.REF.bam"
     }     
-}
 }
 ```
 
