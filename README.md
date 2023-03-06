@@ -71,4 +71,8 @@ The entry *"samples"* specifies a list of samples one wants to apply dicast to. 
 **Parameters:** `params/params_model.json` \
 See above.
 
+## Evaluation
+This step uses trained models to make predicitons for a set of unseen SVs and subsequently compares the predictions with the ground truth labels. This results of this mode are saved in a directory called `eval` inside the model directory. 
+## Evaluation
+
 
