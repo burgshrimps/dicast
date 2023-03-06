@@ -31,7 +31,11 @@ ref | Reference genome name (currently only hg38 supported) | No
 params | Preparation parameter file (see below) | No
 workdir | Working and output directory. Dicast will create a folder called ensemble in this directory and save the results of the preparation step there. | No 
 
+**Parameters**\
+
+
 ### Training
+
 `python dicast.py [-h] [--chr_exclude CHR] [--cur] svtype params clfparams clfname workdir`
 Argument | Description | Optional
 --- | --- | ---
@@ -41,4 +45,6 @@ clfparams | Model parameter file (see below) | No
 clfname | Name of the model in the parameter file | No
 chr_excl | List of chromosomes to exclude from training separated by space | Yes
 cur | Use this flag to change the labels of variants from manual curation, if they were falsely labelled  | Yes
+
+
 
