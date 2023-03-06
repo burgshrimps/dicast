@@ -20,7 +20,7 @@ It is necessary to run the preparation mode before being able to run dicast in a
 ## Preparation
 This step reads in the VCF files specified in the parameter file and saves their content in the file `<sample>_<ref>.SVs.raw.tsv` inside a directory called `ensemble` within the specified working directory. Features in regards to the genomic context of a variant are saved in the file `<sample>_<ref>.SVs.ref.tsv`. Alignment features are collected in parallel and are written to their respective files with the name `<sample>_<ref>.SVs.aln.<tech>.<chr>.tsv`. Lastly, variant, genomic context, and alignment features are combined into a single output file `<sample>_<ref>.SVs.annot.tsv`.\
 \
-**Command:** `python dicast.py [-h] prepare sample ref params workdir` \
+**Command:** `python dicast.py prepare [-h] sample ref params workdir` \
 **Example:** `python dicast.py prepare HG002 hg38 params/params_prep.json /path/to/workdir`
 Argument | Description | Optional
 --- | --- | ---
@@ -35,7 +35,7 @@ The JSON entries under *"ref"* describe the locations of the files containing th
 ## Training
 With this step, a new model is trained for a specific SV type. The model will be saved as PKL file in the following format `<clfname>_<svtype>.pkl` in the directory specified in `clfparams` under the corresponding model name. 
 
-**Command:** `python dicast.py [-h] [--chr_exclude CHR] [--cur] train svtype params clfparams clfname` \
+**Command:** `python dicast.py train [-h] [--chr_exclude CHR] [--cur] svtype params clfparams clfname` \
 **Example:** `python dicast.py train DEL params/params_train.json params/params_model.json RF_100`
 Argument | Description | Optional
 --- | --- | ---
@@ -53,5 +53,16 @@ The training parameter file consists of one or multiple cohort entries. The exam
 This JSON file contains entries for different models, specified by their name. A corresponding model is selected by specifying the name in the command line argument `clfname`. The entry *"classifier"* describes the type of classifier to train. The entry *"directory"* describes the directory the model is saved in. The entry *"parameters"* describes a number of model-specific parameters.
 
 ## Prediction
+This step predicts whether a variant is a true positive or a false positive call for a set of unseen SVs. By default the predictions are saved in a file called `<sample>.dicast.tsv` in the `workdir`. The column "qual_dicast" corresponds to the probability of a variant being a true positive call. Additionally, if specified, an INFO tag, DQ, is added to the input VCF files, which corresponds to the probability of a variant being a true postive call. These modified VCF files are saved with the suffix `.dicast.vcf` in the directories of the input VCF files. It is necessary to run dicast prepare before running dicast predict.
+
+**Command:** `python dicast.py predict [-h] [--vcf] params clfparams clfname workdir` \
+**Example:** `python dicast.py predict --vcf params/params_predict.json params/params_model.json RF_100 /path/to/workdir`
+Argument | Description | Optional
+--- | --- | ---
+params | Prediction parameter file (see below) | No
+clfparams | Model parameter file (see below) | No
+clfname | Name of the model in the parameter file | No
+workdir | Working and output directory | No 
+vcf | Additionally add an INFO tag to the input VCF files and save them in workdir | Yes
 
 
