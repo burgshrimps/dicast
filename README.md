@@ -64,5 +64,10 @@ clfparams | Model parameter file (see below) | No
 clfname | Name of the model in the parameter file | No
 workdir | Working and output directory | No 
 vcf | Additionally add an INFO tag to the input VCF files and save them in workdir | Yes
+**Parameters:** `params/params_predict.json` 
+The entry *"samples"* specifies a list of samples one wants to apply dicast to. The entry *"variant_features"* is the output of dicast prepare. Under the entry *"vcf"* the input VCF files are specified in case one wants to add the INFO tag to them. In all entries, *SAMPLE* and *REF* will be replaced with the respective values from *"samples"* and *"ref"*. \
+\
+**Parameters:** `params/params_model.json` 
+See above.
 
 
