@@ -43,7 +43,7 @@ svtype | SV type to train the model for | No
 params | Training parameter file (see below) | No
 clfparams | Model parameter file (see below) | No
 clfname | Name of the model in the parameter file | No
-chr_excl | List of chromosomes to exclude from training separated by space (Default: None) | Yes
+chr_excl | List of chromosomes to exclude from training separated by space (default: none) | Yes
 cur | Use this flag to change the labels of variants from manual curation, if they were falsely labelled  | Yes
 
 **Parameters:** `params/params_train.json` \
@@ -82,8 +82,15 @@ svtype | SV type to train the model for | No
 params | Training parameter file (see below) | No
 clfparams | Model parameter file (see below) | No
 clfname | Name of the model in the parameter file | No
-chr_incl | List of chromosomes to include in testing separated by space (Default: All) | Yes
+chr_incl | List of chromosomes to include in testing separated by space (default: all) | Yes
 cur | Use this flag to change the labels of variants from manual curation, if they were falsely labelled  | Yes
+
+**Parameters:** `params/params_test.json` \
+Same format as `params/params_train.json`. \
+\
+\
+**Parameters:** `params/params_model.json` \
+See above.
 
 
 
