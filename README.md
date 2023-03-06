@@ -91,5 +91,10 @@ Same format as `params/params_train.json`. \
 **Parameters:** `params/params_model.json` \
 See above.
 
+## Manual Curation
+For a given set of samples and an SV type, this step iteratively trains a model on all but one chromosome and tests the model on the remaining chromosome. Next, inconsistencies between the ground truth labels and the dicast predictions are identified. There are two kinds of inconsistencies:
+1. False Positives (FP): Ground truth says a variant is not confirmed but dicast says it is confirmed
+2. False Negatives (FN): Ground truth says a variant is confirmed but dicast says it is not confirmed
+
 
 
