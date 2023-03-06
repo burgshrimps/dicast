@@ -2,8 +2,7 @@
 
 Dicast is a machine learning-based ensemble structural variant caller for short-read sequencing data. The model takes as input a list of variants and outputs the probability of a variant being a true positive call. A typical use case is applying a number of different variant callers on sequencing data of a sample and then using dicast to decide which variants to keep and which ones to discard.
 
-Modes
-----------------
+## Modes
 There are five modes of operation for dicast.
 1. **Preparation:** Reading in the variant calls of all input callers and performs feature extraction.
 2. **Training:** Training a new model.
@@ -11,16 +10,17 @@ There are five modes of operation for dicast.
 4. **Evaluation:** Test an existing model.
 5. **Manual Curation:** Iteratively train and test an existing model to select a subset of variants for manual curation.
 
-Usage
+## Usage
+General
 ----------------
-### General
 Dicast can be executed in the following way\
 \
 `python dicast.py <mode> <arguments>` \
 \
 It is necessary to run the preparation mode before being able to run dicast in any other mode. Example parameter files can be found in `params/`.
 
-### Preparation
+Preparation
+----------------
 This step reads in the VCF files specified in the parameter file and saves their content in the file `<sample>_<ref>.SVs.raw.tsv` inside a directory called `ensemble` within the specified working directory. Features in regards to the genomic context of a variant are saved in the file `<sample>_<ref>.SVs.ref.tsv`. Alignment features are collected in parallel and are written to their respective files with the name `<sample>_<ref>.SVs.aln.<tech>.<chr>.tsv`. Lastly, variant, genomic context, and alignment features are combined into a single output file `<sample>_<ref>.SVs.annot.tsv`.\
 \
 **Command:** `python dicast.py [-h] prepare sample ref params workdir` \
@@ -35,7 +35,8 @@ workdir | Working and output directory. Dicast will create a folder called ensem
 **Parameters:** `params/params_prep.json` \
 The JSON entries under *"ref"* describe the locations of the files containing the reference features for the respective reference genome. Under *"vcf"* there exists one entry for every sequencing technology dicast is applied to. Under every sequencing technology entry there exists an SV caller entry determining the location of the corresponding input VCF file. In the same manner, the location of the input BAM files are declared under *"bam"*. In all entries, *SAMPLE* and *REF* will be replaced with the respective values passed as command line arguments.
 
-### Training
+Training
+----------------
 With this step, a new model is trained for a specific SV type. The model will be saved as PKL file in the following format `<clfname>_<svtype>.pkl` in the directory specified in `clfparams` under the corresponding model name. 
 
 **Command:** `python dicast.py [-h] [--chr_exclude CHR] [--cur] train svtype params clfparams clfname` \
