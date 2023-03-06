@@ -1,6 +1,7 @@
 # Dicast
 
 Dicast is a machine learning-based ensemble structural variant caller for short-read sequencing data. The model takes as input a list of variants and outputs the probability of a variant being a true positive call. A typical use case is applying a number of different variant callers on sequencing data of a sample and then using dicast to decide which variants to keep and which ones to discard.
+\
 
 ## Modes
 There are five modes of operation for dicast.
@@ -9,6 +10,7 @@ There are five modes of operation for dicast.
 3. **[Prediction:](#prediction)** Use an existing model to make predictions on new data.
 4. **[Evaluation:](#evaluation)** Test an existing model.
 5. **[Manual Curation:](#manual-curation)** Iteratively train and test an existing model to select a subset of variants for manual curation.
+\
 
 ## General
 Dicast can be executed in the following way\
@@ -16,6 +18,7 @@ Dicast can be executed in the following way\
 `python dicast.py <mode> <arguments>` \
 \
 It is necessary to run the preparation mode before being able to run dicast in any other mode. Example parameter files can be found in `params/`.
+\
 
 ## Preparation
 This step reads in the VCF files specified in the parameter file and saves their content in the file `<sample>_<ref>.SVs.raw.tsv` inside a directory called `ensemble` within the specified working directory. Features in regards to the genomic context of a variant are saved in the file `<sample>_<ref>.SVs.ref.tsv`. Alignment features are collected in parallel and are written to their respective files with the name `<sample>_<ref>.SVs.aln.<tech>.<chr>.tsv`. Lastly, variant, genomic context, and alignment features are combined into a single output file `<sample>_<ref>.SVs.annot.tsv`.\
