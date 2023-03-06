@@ -37,7 +37,7 @@ The JSON entries under *"ref"* describe the locations of the files containing th
 
 
 ### Training
-
+With this step, a new model is trained for a specific SV type. The model will be saved as PKL file in the following format `<modelname>_<svtype>.pkl` in the directory specified in `clfparams`.
 `python dicast.py [-h] [--chr_exclude CHR] [--cur] svtype params clfparams clfname workdir`
 Argument | Description | Optional
 --- | --- | ---
