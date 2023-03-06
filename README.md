@@ -51,6 +51,6 @@ chr_excl | List of chromosomes to exclude from training separated by space | Yes
 cur | Use this flag to change the labels of variants from manual curation, if they were falsely labelled  | Yes
 
 **Parameters:** `params/params_train.json` 
-The training parameter file consists of one or multiple cohort entries. The example parameter file contains one cohort called "tgenvar". A cohort describes a group of samples with the same directory and file structure. The entry *"samples"* is a list of samples used for training a model. *"ref"* is the name of the reference genome.
+The training parameter file consists of one or multiple cohort entries. The example parameter file contains one cohort called "tgenvar". A cohort describes a group of samples with the same directory and file structure. The entry *"samples"* is a list of samples used for training a model, *"ref"* is the name of the reference genome, *"variant_features"* is the output from the preparation step, *"variant_labels"* contains the IDs of all confirmed (true positive) variants. Lastly *"variant_curation"* is the output file of the manual curation and contains corrected labels for manually curated SVs. 
 
 
