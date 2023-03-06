@@ -35,8 +35,7 @@ workdir | Working and output directory. Dicast will create a folder called ensem
 **Parameters:** `params/params_prep.json` \
 The JSON entries under *"ref"* describe the locations of the files containing the reference features for the respective reference genome. Under *"vcf"* there exists one entry for every sequencing technology dicast is applied to. Under every sequencing technology entry there exists an SV caller entry determining the location of the corresponding input VCF file. In the same manner, the location of the input BAM files are declared under *"bam"*. In all entries, *SAMPLE* and *REF* will be replaced with the respective values passed as command line arguments.
 
-Training
-----------------
+## Training
 With this step, a new model is trained for a specific SV type. The model will be saved as PKL file in the following format `<clfname>_<svtype>.pkl` in the directory specified in `clfparams` under the corresponding model name. 
 
 **Command:** `python dicast.py [-h] [--chr_exclude CHR] [--cur] train svtype params clfparams clfname` \
@@ -56,7 +55,6 @@ The training parameter file consists of one or multiple cohort entries. The exam
 **Parameters:** `params/params_model.json` 
 This JSON file contains entries for different models, specified by their name. A corresponding model is selected by specifying the name in the command line argument `clfname`. The entry *"classifier"* describes the type of classifier to train. The entry *"directory"* describes the directory the model is saved in. The entry *"parameters"* describes a number of model-specific parameters.
 
-Prediction
-----------------
+## Prediction
 
 
