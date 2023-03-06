@@ -4,7 +4,7 @@ Dicast is a machine learning-based ensemble structural variant caller for short-
 
 ## Modes
 There are five modes of operation for dicast.
-1. **Preparation:** Reading in the variant calls of all input callers and performs feature extraction.
+1. **[Preparation](#preparation):** Reading in the variant calls of all input callers and performs feature extraction.
 2. **Training:** Training a new model.
 3. **Prediction:** Use an existing model to make predictions on new data.
 4. **Evaluation:** Test an existing model.
