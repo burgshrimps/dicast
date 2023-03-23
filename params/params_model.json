@@ -3,6 +3,7 @@
     {
         "classifier" : "RandomForestClassifier",
         "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models/RF_raw_100",
+        "features" : ["variant", "reference", "alignment"],
         "parameters" : 
         {
             "n_estimators" : 100,
@@ -14,6 +15,19 @@
     {
         "classifier" : "RandomForestClassifier",
         "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models/RF_100",
+        "features" : ["variant", "reference", "alignment"],
+        "parameters" : 
+        {
+            "n_estimators" : 100,
+            "random_state" : 0
+        }
+    },
+
+"RF_bal_100" :
+    {
+        "classifier" : "RandomForestClassifier",
+        "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models/RF_bal_100",
+        "features" : ["variant", "reference", "alignment"],
         "parameters" : 
         {
             "n_estimators" : 100,

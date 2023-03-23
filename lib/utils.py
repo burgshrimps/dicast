@@ -7,6 +7,7 @@ from matplotlib import gridspec
 import pandas as pd
 import pysam
 import os
+import re
 
 
 def read_parameters(file):
@@ -145,3 +146,83 @@ def mad(arr):
     
     med = np.median(arr)
     return np.median(np.abs(arr - med))
+
+
+def parse_vcf(vcf, tech, method, sample, svtypes=['DEL', 'INS', 'INV', 'DUP', 'BND'], check_gt=False):
+    """ Parses VCF and saves info in pandas dataframe.
+
+    param vcf: pysam.VariantFile object 
+    param tech: string, technology used for SV calling
+    param method: string, method used for SV calling
+    param sample: string, sample name 
+    param svtypes: list of strings, SV types to keep
+    param check_gt: boolean, if true only keep variants which are present in sample
+    
+    return: pandas dataframe with SV info """  
+    
+    
+    vcf_dict = {'id': [], 'sample': [], 'tech' : [], 'method' : [], 'type': [], 'chrom': [], 
+                'start' : [], 'chrom2' : [], 'end': [], 'size' : [], 'filter': [], 'qual' : []}
+
+    for rec in vcf.fetch():
+
+        # Check genotype of sample and only keep SVs that are present in sample
+        if check_gt:
+            if 1 in rec.samples[sample]['GT']:
+                pass
+            else:
+                continue
+
+        # Check whether SV type is in list of SV types to keep
+        # Sometimes SVTYPE is a tuple, sometimes it is a string
+        if rec.info['SVTYPE'] in svtypes or rec.info['SVTYPE'][0] in svtypes:
+
+            # Information that is always present
+            vcf_dict['id'].append(rec.id)
+            vcf_dict['sample'].append(sample)
+            vcf_dict['tech'].append(tech)
+            vcf_dict['method'].append(method)
+            vcf_dict['chrom'].append(rec.chrom)
+            vcf_dict['filter'].append(', '.join(rec.filter.keys()))
+            vcf_dict['qual'].append(rec.qual)
+            vcf_dict['type'].append(rec.info['SVTYPE'])
+            vcf_dict['start'].append(rec.start + 1)
+
+            # Deletions
+            if rec.info['SVTYPE'] == 'DEL':
+                vcf_dict['chrom2'].append(np.nan)
+                vcf_dict['end'].append(rec.stop)
+                vcf_dict['size'].append(rec.stop - (rec.start + 1))
+
+            # Insertions
+            elif rec.info['SVTYPE'] == 'INS':
+                vcf_dict['chrom2'].append(np.nan)
+                vcf_dict['end'].append(rec.start + 2)
+                
+                try:
+                    vcf_dict['size'].append(rec.info['SVLEN'])
+                except KeyError:
+                    vcf_dict['size'].append(np.nan)
+
+            # Inversions
+            elif rec.info['SVTYPE'] == 'INV':
+                vcf_dict['end'].append(rec.stop)
+                vcf_dict['size'].append(rec.stop - (rec.start + 1))
+                vcf_dict['chrom2'].append(np.nan)
+
+            # Duplications
+            elif rec.info['SVTYPE'] == 'DUP':
+                vcf_dict['end'].append(rec.stop)
+                vcf_dict['size'].append(rec.stop - (rec.start + 1))
+                vcf_dict['chrom2'].append(np.nan)
+
+            # Breakends (Translocations)
+            elif rec.info['SVTYPE'] == 'BND':
+                vcf_dict['chrom2'].append(re.search(r'chr.*:', rec.alts[0]).group(0)[:-1])
+                vcf_dict['end'].append(re.search(r':[0-9]*', rec.alts[0]).group(0)[1:])
+                vcf_dict['size'].append(np.nan)
+
+            else:
+                print('SV type not supported: ' + rec.info['SVTYPE'])
+
+    return pd.DataFrame(vcf_dict)

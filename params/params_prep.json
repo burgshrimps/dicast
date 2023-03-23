@@ -23,9 +23,9 @@
     {
         "ill" :
         {
-            "delly" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/delly/SAMPLE/variants.bcf",
-            "manta" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/manta/SAMPLE/results/variants/diploidSV_wINV.vcf.gz",
-            "lumpy" : "/confidential/tGenVar/tech/illumina/snakemake_results/sv_REF/lumpy/SAMPLE/SAMPLE-smoove.genotyped.vcf.gz"
+            "delly" : "/confidential/tGenVar/train_dicast_pipeline/results/calls/delly/GRCh38/SAMPLE/formatted_variants.vcf.gz",
+            "manta" : "/confidential/tGenVar/train_dicast_pipeline/results/calls/manta/GRCh38/SAMPLE/formatted_variants.vcf.gz",
+            "lumpy" : "/confidential/tGenVar/train_dicast_pipeline/results/calls/lumpy/GRCh38/SAMPLE/formatted_variants.vcf.gz"
         }
     },
 

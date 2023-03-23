@@ -4,7 +4,7 @@ import numpy as np
 import re
 import os
 
-from lib.utils import replace_filename
+from lib.utils import replace_filename, parse_vcf
 
 
 class VariantPrep:
@@ -34,70 +34,6 @@ class VariantPrep:
 
         # List of chromosomes to use
         self.chroms = chroms
-
-
-    def parse_vcf(self, vcf, tech, method, sample):
-        """ Parses VCF and saves info in pandas dataframe.
-
-        param vcf: pysam.VariantFile object 
-        param tech: string, technology used for SV calling
-        param method: string, method used for SV calling
-        param sample: string, sample name 
-        
-        return: pandas dataframe with SV info """  
-
-        vcf_dict = {'id': [], 'sample': [], 'tech' : [], 'method' : [], 'type': [], 'chrom': [], 'start' : [], 'chrom2' : [], 'end': [], 'size' : [], 'filter': [], 'qual' : []}
-
-        for rec in vcf.fetch():
-            # Information that is always present
-            vcf_dict['id'].append(rec.id)
-            vcf_dict['sample'].append(sample)
-            vcf_dict['tech'].append(tech)
-            vcf_dict['method'].append(method)
-            vcf_dict['type'].append(rec.info['SVTYPE'])
-            vcf_dict['chrom'].append(rec.chrom)
-            vcf_dict['start'].append(rec.start)
-            vcf_dict['filter'].append(', '.join(rec.filter.keys()))
-            vcf_dict['qual'].append(rec.qual)
-
-
-            # Deletions
-            if rec.info['SVTYPE'] == 'DEL':
-                vcf_dict['end'].append(rec.stop)
-                vcf_dict['size'].append(rec.stop - rec.start)
-                vcf_dict['chrom2'].append(np.nan)
-            
-            # Insertions
-            elif rec.info['SVTYPE'] == 'INS':
-                if rec.stop == rec.start:
-                    vcf_dict['end'].append(rec.stop + 1)
-                else:
-                    vcf_dict['end'].append(rec.stop)
-                try:
-                    vcf_dict['size'].append(rec.info['SVLEN'])
-                except KeyError:
-                    vcf_dict['size'].append(np.nan)
-                vcf_dict['chrom2'].append(np.nan)
-
-            # Inversions
-            elif rec.info['SVTYPE'] == 'INV':
-                vcf_dict['end'].append(rec.stop)
-                vcf_dict['size'].append(rec.stop - rec.start)
-                vcf_dict['chrom2'].append(np.nan)
-
-            # Duplications
-            elif rec.info['SVTYPE'] == 'DUP':
-                vcf_dict['end'].append(rec.stop)
-                vcf_dict['size'].append(rec.stop - rec.start)
-                vcf_dict['chrom2'].append(np.nan)
-
-            # Breakends (Translocations)
-            elif rec.info['SVTYPE'] == 'BND':
-                vcf_dict['chrom2'].append(re.search(r'chr.*:', rec.alts[0]).group(0)[:-1])
-                vcf_dict['end'].append(re.search(r':[0-9]*', rec.alts[0]).group(0)[1:])
-                vcf_dict['size'].append(np.nan)
-
-        return pd.DataFrame(vcf_dict)
 
 
     def check_out_of_bounds(self, svtype, chrom, chrom2, start, end, chrom_sizes, padding=50):
@@ -142,7 +78,7 @@ class VariantPrep:
             for method in self.params['vcf'][tech]:
                 filename_vcf = replace_filename(self.params['vcf'][tech][method], self.sample, self.ref)
                 vcf = self.read_vcf(filename_vcf)
-                df = self.parse_vcf(vcf, tech, method, self.sample)
+                df = parse_vcf(vcf, tech, method, self.sample)
                 vcf_dfs.append(df)
         
         self.df_variants = pd.concat(vcf_dfs, ignore_index=True)

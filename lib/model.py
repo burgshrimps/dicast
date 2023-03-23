@@ -1,6 +1,7 @@
 import pandas as pd 
 from collections import defaultdict
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.utils import resample
 import pickle
 import logging
 import bioframe as bf
@@ -18,7 +19,7 @@ from lib.utils import replace_filename
 class Dicast:
     """ Class to train a model. """
 
-    def __init__(self, mode, svtype, params, pkl=None, clf=None, clfparams=None, chr_excl=[], chr_incl=['all'], incl_cur=False):
+    def __init__(self, mode, svtype, params, pkl=None, clf=None, clfparams=None, chr_excl=[], chr_incl=['all'], incl_cur=False, balance=False):
         """ Initialize class. 
         
         param mode: string, 'train', 'test' or 'predict'
@@ -36,6 +37,7 @@ class Dicast:
         self.chr_excl = chr_excl
         self.chr_incl = chr_incl
         self.incl_cur = incl_cur
+        self.balance = balance
 
         if pkl != None:
             self.pkl = pkl
@@ -154,6 +156,17 @@ class Dicast:
         if self.mode == 'train' or self.mode == 'test' or self.mode == 'curate':
             self.variants = self.variants.sort_values(by=['confirmed'], ascending=True).reset_index(drop=True)
 
+        # Resample to balance classes, because in all cases we have more negative than positive examples
+        if self.mode == 'train':
+            if self.balance:
+                variants_confirmed = self.variants[self.variants['confirmed'] == 1].copy().reset_index(drop=True)
+                variants_unconfirmed = self.variants[self.variants['confirmed'] == 0].copy().reset_index(drop=True)
+
+                variants_confirmed_upsampled = resample(variants_confirmed, replace=True, n_samples=len(variants_confirmed)*2)
+                variants_unconfirmed_downsampled = resample(variants_unconfirmed, replace=False, n_samples=len(variants_confirmed)*2)
+
+                self.variants = pd.concat([variants_confirmed_upsampled, variants_unconfirmed_downsampled], ignore_index=True)
+
 
     def check_caller_support(self, row, min_num_callers):
         """ Adds caller support to dataframe. 
@@ -233,6 +246,21 @@ class Dicast:
             self.variants['qual_' + str(i+1) + '_caller_support'] = self.variants.apply(lambda x: self.check_caller_support(x[['qual_' + method for method in methods]], i+1), axis=1)
             self.variants['qual_' + str(i+1) + '_caller_support'] = self.variants['qual_' + str(i+1) + '_caller_support'].apply(lambda x: np.round(x, 2))
 
+    def set_features(self, columns):
+        """ Set features. 
+        
+        param columns: list of strings, column names """
+
+        features = []
+        if 'variant' in self.clfparams['features']:
+            features += ['size']
+        if 'alignment' in self.clfparams['features']:
+            features += [f for f in columns if f.startswith('ill')]
+        if 'reference' in self.clfparams['features']:
+            features += [f for f in columns if f.startswith('rep')] + ['cpg_islands', 'centromeres', 'asmb_gaps', 'alt_haps', 'GC_content_left', 'GC_content_right']
+        
+        return features
+
 
     def train(self):
         """ Train model. """
@@ -240,7 +268,8 @@ class Dicast:
         # Filter based on excluded chromosomes
         variants_training = self.variants[~self.variants['chrom'].isin(self.chr_excl)].copy().reset_index(drop=True)
 
-        features = list(variants_training.columns[12:-1]) + ['size']
+        columns = list(variants_training.columns[12:-1]) + ['size']
+        features = self.set_features(columns)
 
         # Check how many variants are excluded due to missing feature values
         num_svs = len(variants_training)
@@ -266,7 +295,8 @@ class Dicast:
         if self.chr_incl[0] != 'all':
             self.variants = self.variants[self.variants['chrom'].isin(self.chr_incl)].copy().reset_index(drop=True)
 
-        features = list(self.variants.columns[12:]) + ['size']
+        columns = list(self.variants.columns[12:-1]) + ['size']
+        features = self.set_features(columns)
 
         # Remove confirmed column if present, this is the case during model curation
         if 'confirmed' in features:
@@ -354,8 +384,12 @@ class Dicast:
         meta[self.type]['methods'] = self.variants['method'].unique().tolist()
         meta[self.type]['num_svs'] = len(self.variants)
         meta[self.type]['num_nas'] = len(self.variants) - self.num_svs_rm_na
+        meta[self.type]['num_pos'] = len(self.variants[self.variants['confirmed'] == 1])
+        meta[self.type]['num_neg'] = len(self.variants[self.variants['confirmed'] == 0])
         meta[self.type]['curation'] = self.incl_cur
+        meta[self.type]['balance'] = self.balance
         meta[self.type]['chr_excl'] = self.chr_excl
+        meta[self.type]['features'] = self.clfparams['features']
         meta[self.type]['params'] = self.clfparams['parameters']
         json_object = json.dumps(meta, indent=4)
         with open(json_file, 'w') as f:

@@ -19,6 +19,7 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_train.add_argument('clfname', help='Name of model to train')
     parser_train.add_argument('--chr_excl', help='Chromsomes to exclude from training', nargs='+', default=[])
     parser_train.add_argument('--cur', help='Use this flag to change the labels of variants from manual curation', action=argparse.BooleanOptionalAction, default=False)
+    parser_train.add_argument('--bal', help='Use this flag to perform resampling to balance the dataset', action=argparse.BooleanOptionalAction, default=False)
 
     parser_test = subparsers.add_parser('test', help='Test a model')
     parser_test.add_argument('svtype', help='SV type to test the model for')

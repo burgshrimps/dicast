@@ -65,7 +65,7 @@ class AlignmentAnnotatorIllumina:
             stop = start + s
             region = self.chrom + ':' + str(start) + '-' + str(stop)
             df = pd.DataFrame([x.split('\t') for x in pysam.depth(self.alignment_file, 
-                                                                  '-r', region, '-a').split('\n')[:-1]])
+                                                                  '-r', region, '-a', '-g', 'SECONDARY,SUPPLEMENTARY').split('\n')[:-1]])
             df.rename({0 : 'chrom', 1 : 'pos', 2 : 'coverage'}, axis=1, inplace=True)
             df['coverage'] = df['coverage'].astype(int)
             self.baseline_coverage_mean += df['coverage'].mean()
@@ -121,7 +121,7 @@ class AlignmentAnnotatorIllumina:
     def calculate_coverage_region(self, chrom, start, stop, suffix):
         """ Calculates mean and std coverage of a region. """
 
-        df = pd.DataFrame([x.split('\t') for x in pysam.depth(self.alignment_file, '-r', chrom + ':' + str(start) + '-' + str(stop), '-a').split('\n')[:-1]])
+        df = pd.DataFrame([x.split('\t') for x in pysam.depth(self.alignment_file, '-r', chrom + ':' + str(start) + '-' + str(stop), '-a', '-g', 'SECONDARY,SUPPLEMENTARY').split('\n')[:-1]])
         df.rename({0 : 'chrom', 1 : 'pos', 2 : 'coverage'}, axis=1, inplace=True)
         try:
             df['coverage'] = df['coverage'].astype(int)

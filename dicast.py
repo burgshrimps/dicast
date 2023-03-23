@@ -246,7 +246,8 @@ if __name__ == '__main__':
         clfparams = read_parameters(arguments.clfparams)
         model_out = clfparams[arguments.clfname]['directory'] + '/' + arguments.clfname + '_' + arguments.svtype.upper() + '.pkl'
 
-        dicast = Dicast('train', arguments.svtype, params, pkl=model_out, clf=arguments.clfname, clfparams=clfparams, chr_excl=arguments.chr_excl, incl_cur=arguments.cur)
+        dicast = Dicast('train', arguments.svtype, params, pkl=model_out, clf=arguments.clfname, clfparams=clfparams, 
+                        chr_excl=arguments.chr_excl, incl_cur=arguments.cur, balance=arguments.bal)
         logging.info('# Load Training Data')
         dicast.load_data()
         logging.info('# Train Model')
@@ -267,7 +268,8 @@ if __name__ == '__main__':
         clfparams = read_parameters(arguments.clfparams)
         model_in = clfparams[arguments.clfname]['directory'] + '/' + arguments.clfname + '_' + arguments.svtype.upper() + '.pkl'
 
-        dicast = Dicast('test', arguments.svtype, params, pkl=model_in, clf=arguments.clfname, clfparams=clfparams, chr_incl=arguments.chr_incl, incl_cur=arguments.cur)
+        dicast = Dicast('test', arguments.svtype, params, pkl=model_in, clf=arguments.clfname, clfparams=clfparams, chr_incl=arguments.chr_incl, 
+                        incl_cur=arguments.cur)
         logging.info('# Load Test Data')
         dicast.load_data()
         logging.info('# Load Model')

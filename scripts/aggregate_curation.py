@@ -31,7 +31,7 @@ def aggregate_curation(sample, ref, date, directory, curators):
         curator_col = 'Confirmed (' + curator + ')'
         try:
             curation_df = pd.concat([pd.read_csv(fname, sep='\t') for fname in glob(directory + '/*/*/*/' + date + '*' + curator + '_curated.tsv')], ignore_index=True)
-            curation_df = curation_df[['sample', 'tech', 'method', 'id', 'type', 'confirmed', 'pred_dicast', 'err_type', curator_col]].copy()
+            curation_df = curation_df[['sample', 'tech', 'method', 'id', 'type', 'chrom', 'chrom2', 'start', 'end', 'confirmed', 'pred_dicast', 'err_type', curator_col]].copy()
             curation_df[curator_col] = curation_df[curator_col].replace({True: 1, False: 0})
             curation_dfs.append(curation_df)
             curator_cols.append(curator_col)
@@ -41,12 +41,12 @@ def aggregate_curation(sample, ref, date, directory, curators):
     curation_df = curation_dfs[0]
     if len(curation_dfs) > 1:
         for i in range(1, len(curation_dfs)):
-            curation_df = curation_df.merge(curation_dfs[i], on=['sample', 'tech', 'method', 'id', 'type', 'confirmed', 'pred_dicast', 'err_type'], how='left')
+            curation_df = curation_df.merge(curation_dfs[i], on=['sample', 'tech', 'method', 'id', 'type', 'chrom', 'chrom2', 'start', 'end', 'confirmed', 'pred_dicast', 'err_type'], how='left')
         curation_df['Confirmed (Consensus)'] = curation_df[curator_cols].apply(consensus_curate, axis=1)
     else:
         curation_df['Confirmed (Consensus)'] = curation_df[curator_cols[0]]
-    curation_df.to_csv(directory + '/' + sample + '_' + ref + '.SVs.curated.tsv', sep='\t', index=False)
-    curation_df.to_csv(directory + '/' + date + '_' + sample + '_' + ref + '.SVs.curated.tsv', sep='\t', index=False)
+    curation_df.to_csv(directory + '/' + sample + '_' + ref + '.SVs.curated_old_ids.tsv', sep='\t', index=False)
+    #curation_df.to_csv(directory + '/' + date + '_' + sample + '_' + ref + '.SVs.curated.tsv', sep='\t', index=False)
 
 
 date = sys.argv[1]
