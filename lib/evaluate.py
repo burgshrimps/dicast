@@ -72,7 +72,12 @@ class Eva:
 
         self.variants_dicast = pd.read_csv(self.fname_dicast, sep='\t')
         self.variants_dicast = self.variants_dicast[self.variants_dicast['type'].isin(self.svtypes)].copy().reset_index(drop=True)
+
+        ### TEMPORARY START
         self.variants_dicast['tech'] = 'mgi'
+        self.variants_dicast = self.variants_dicast[self.variants_dicast['method'] != 'gridss'].copy().reset_index(drop=True)
+        ### TEMPORARY END
+
         self.variants_dicast.rename(columns={'id': 'id_org'}, inplace=True)
 
         dicast_variant_dfs = []

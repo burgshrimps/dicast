@@ -9,8 +9,7 @@
         {
             "delly" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/delly/GRCh38/HG002_MGI/formatted_variants.vcf",
             "manta" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/manta/GRCh38/HG002_MGI/formatted_variants.vcf",
-            "lumpy" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/lumpy/GRCh38/HG002_MGI/formatted_variants.vcf",
-            "gridss" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/gridss/GRCh38/HG002_MGI/formatted_variants.vcf"
+            "lumpy" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/lumpy/GRCh38/HG002_MGI/formatted_variants.vcf"
         }
     }
 }

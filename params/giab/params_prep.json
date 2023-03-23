@@ -23,14 +23,14 @@
     {
         "ill" :
         {
-            "delly" : "/confidential/tGenVar/train_dicast_pipeline/results/calls/delly/GRCh38/SAMPLE/formatted_variants.vcf.gz",
-            "manta" : "/confidential/tGenVar/train_dicast_pipeline/results/calls/manta/GRCh38/SAMPLE/formatted_variants.vcf.gz",
-            "lumpy" : "/confidential/tGenVar/train_dicast_pipeline/results/calls/lumpy/GRCh38/SAMPLE/formatted_variants.vcf.gz"
+            "delly" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/delly/GRCh38/HG002_MGI/formatted_variants.vcf",
+            "manta" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/manta/GRCh38/HG002_MGI/formatted_variants.vcf",
+            "lumpy" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/lumpy/GRCh38/HG002_MGI/formatted_variants.vcf"
         }
     },
 
     "bam" : 
     {
-        "ill": "/confidential/tGenVar/tech/illumina/bam_REF/ill.SAMPLE.REF.bam"
+        "ill": "/confidential/tGenVar/scripts/tGenVar/dicast/giab/bam/GRCh38.bwa_mem.pe.sorted.mdup.recal.bam"
     }     
 }
