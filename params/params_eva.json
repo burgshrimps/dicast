@@ -2,7 +2,7 @@
     "sample" : "NA24385",
     "ref" : "hg38",
     "dicast" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/HG002_MGI.dicast.tsv",
-    "benchmark" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/HG002_insdel.vcf",
+    "benchmark" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/variants_freeze4_sv_insdel.tsv",
     "vcf" : 
     {
         "mgi" :
