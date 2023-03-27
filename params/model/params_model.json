@@ -1,5 +1,5 @@
 {
-"RF_raw_100" :
+    "RF_raw_100" :
     {
         "classifier" : "RandomForestClassifier",
         "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models/RF_raw_100",
@@ -11,7 +11,7 @@
         }
     },
     
-"RF_100" :
+    "RF_100" :
     {
         "classifier" : "RandomForestClassifier",
         "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models/RF_100",
@@ -23,7 +23,7 @@
         }
     },
 
-"RF_bal_100" :
+    "RF_bal_100" :
     {
         "classifier" : "RandomForestClassifier",
         "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models/RF_bal_100",
@@ -32,6 +32,19 @@
         {
             "n_estimators" : 100,
             "random_state" : 0
+        }
+    },
+
+    "XGB_100" :
+    {
+        "classifier" : "XGBoostClassifier",
+        "directory" : "/confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models/XGB_100",
+        "features" : ["variant", "reference", "alignment"],
+        "parameters" : 
+        {
+            "n_estimators" : 100,
+            "random_state" : 0,
+            "n_jobs" : 20
         }
     }
 }

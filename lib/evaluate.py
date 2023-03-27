@@ -51,6 +51,7 @@ class Eva:
                 filename_vcf = replace_filename(self.fnames_methods[tech][method], self.sample, self.ref)
                 vcf = self.read_vcf(filename_vcf)
                 df = parse_vcf(vcf, tech, method, self.sample)
+                df = df[df['chrom'].isin(CHROMS)].copy().reset_index(drop=True)
                 vcf_dfs.append(df)
         
         self.variants_methods = pd.concat(vcf_dfs, ignore_index=True)

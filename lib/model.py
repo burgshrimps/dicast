@@ -12,6 +12,7 @@ import pysam
 import pathlib
 import sys
 import json
+import xgboost as xgb
 
 from lib.utils import replace_filename
 
@@ -45,6 +46,8 @@ class Dicast:
             self.clf = clf
         if clfparams != None:
             self.clfparams = clfparams[clf]
+
+        self.cov_thr = 6 # Threshold for log2 change in coverage to be considered for feature extraction, otherwise jump
 
 
     def load_sample(self, sample, ref, variant_features, variant_labels=None, variant_curated=None):
@@ -262,6 +265,26 @@ class Dicast:
         return features
 
 
+    def prepare_data_for_model(self, variants, features, labels=False):
+
+        if self.clfparams['classifier'] == 'RandomForestClassifier':
+            
+            # Drop variants with missing values
+            variants = variants.dropna(subset=features).copy().reset_index(drop=True)
+            self.num_svs_rm_na = len(variants)
+
+        elif self.clfparams['classifier'] == 'XGBoostClassifier':
+
+            self.num_svs_rm_na = 0
+
+        X = variants[features]
+        if labels:
+            y = variants['confirmed']
+            return X, y
+        else:
+            return X
+
+
     def train(self):
         """ Train model. """
 
@@ -271,21 +294,44 @@ class Dicast:
         columns = list(variants_training.columns[12:-1]) + ['size']
         features = self.set_features(columns)
 
-        # Check how many variants are excluded due to missing feature values
-        num_svs = len(variants_training)
-        variants_training = variants_training.dropna(subset=features).copy().reset_index(drop=True)
-        logging.info(f'# Dropped {num_svs - len(variants_training)}/{num_svs} SVs due to missing feature values')
-        self.num_svs_rm_na = len(variants_training)
-
-        X = variants_training[features]
-        y = variants_training['confirmed']
-
         if self.clfparams['classifier'] == 'RandomForestClassifier':
+
+            X, y = self.prepare_data_for_model(variants_training, features, labels=True)
             self.model = RandomForestClassifier(**self.clfparams['parameters'])
+            self.model.fit(X, y)
+
+        elif self.clfparams['classifier'] == 'XGBoostClassifier':
+            
+            X, y = self.prepare_data_for_model(variants_training, features, labels=True)
+            self.model = xgb.XGBClassifier(**self.clfparams['parameters'])
+            self.model.fit(X, y)
+
         else:
+
             raise ValueError(f'Invalid classifier: {self.clfparams["classifier"]}')
 
-        self.model.fit(X, y)
+
+    def impute(self):
+
+        # Impute size, for now only relevant for unresolved insertions by manta
+        manta_ins_with_size = self.variants[(self.variants['method'] == 'manta') & (self.variants['type'] == 'INS') & (self.variants['size'].notna())].copy().reset_index(drop=True)
+        manta_ins_without_size = self.variants[(self.variants['method'] == 'manta') & (self.variants['type'] == 'INS') & (self.variants['size'].isna())].copy().reset_index(drop=True)
+        manta_ins_without_size['size'] = manta_ins_with_size['size'].median()
+        self.variants.loc[self.variants['id'].isin(manta_ins_without_size['id']), 'size'] = manta_ins_without_size['size']
+
+        # Impute GC Content
+        self.variants['GC_content_left'] = self.variants['GC_content_left'].fillna(self.variants['GC_content_left'].median())
+        self.variants['GC_content_right'] = self.variants['GC_content_right'].fillna(self.variants['GC_content_right'].median())
+
+        # Impute coverage, was set to NA during feature extraction process if coverage exceeded threshold
+        self.variants['ill_cov_mean_I'] = self.variants['ill_cov_mean_I'].fillna(self.cov_thr)
+        self.variants['ill_cov_mean_II'] = self.variants['ill_cov_mean_II'].fillna(self.cov_thr)
+        self.variants['ill_cov_mean_III'] = self.variants['ill_cov_mean_III'].fillna(self.cov_thr)
+        self.variants['ill_cov_mean_IV'] = self.variants['ill_cov_mean_IV'].fillna(self.cov_thr)
+        self.variants['ill_cov_std_I'] = self.variants['ill_cov_std_I'].fillna(1)
+        self.variants['ill_cov_std_II'] = self.variants['ill_cov_std_II'].fillna(1)
+        self.variants['ill_cov_std_III'] = self.variants['ill_cov_std_III'].fillna(1)
+        self.variants['ill_cov_std_IV'] = self.variants['ill_cov_std_IV'].fillna(1)
 
 
     def predict(self):
@@ -293,35 +339,45 @@ class Dicast:
 
         # Filter based on included chromosomes
         if self.chr_incl[0] != 'all':
-            self.variants = self.variants[self.variants['chrom'].isin(self.chr_incl)].copy().reset_index(drop=True)
+            variants_predicting = self.variants[self.variants['chrom'].isin(self.chr_incl)].copy().reset_index(drop=True)
+        else:
+            variants_predicting = self.variants.copy().reset_index(drop=True)
 
-        columns = list(self.variants.columns[12:-1]) + ['size']
+        columns = list(variants_predicting.columns[12:]) + ['size']
         features = self.set_features(columns)
 
         # Remove confirmed column if present, this is the case during model curation
         if 'confirmed' in features:
             features.remove('confirmed')
 
-        # Check how many variants are excluded due to missing feature values
-        num_svs = len(self.variants)
-        variants_na = self.variants[self.variants[features].isna().any(axis=1)].copy().reset_index(drop=True)
-        self.variants = self.variants.dropna(subset=features).copy().reset_index(drop=True)
-        logging.info(f'# Dropped {num_svs - len(self.variants)}/{num_svs} SVs due to missing feature values')
+        if self.clfparams['classifier'] == 'RandomForestClassifier':
 
-        X = self.variants[features]
+            X = self.prepare_data_for_model(variants_predicting, features)
+            
+            variants_na = variants_predicting[variants_predicting[features].isna().any(axis=1)].copy().reset_index(drop=True)
+            variants_predicting = variants_predicting.dropna(subset=features).copy().reset_index(drop=True)
 
-        self.variants['pred_dicast'] = self.model.predict(X)
-        self.variants['qual_dicast'] = self.model.predict_proba(X)[:, 1]
-        self.variants['qual_dicast'] = self.variants['qual_dicast'].apply(lambda x: np.round(x, 2))
+            variants_predicting['pred_dicast'] = self.model.predict(X)
+            variants_predicting['qual_dicast'] = self.model.predict_proba(X)[:, 1]
+            variants_predicting['qual_dicast'] = variants_predicting['qual_dicast'].apply(lambda x: np.round(x, 2))
 
-        variants_na['pred_dicast'] = 0
-        variants_na['qual_dicast'] = 0
+            variants_na = variants_predicting[variants_predicting[features].isna().any(axis=1)].copy().reset_index(drop=True)
+            variants_na['pred_dicast'] = 0
+            variants_na['qual_dicast'] = 0
 
-        # Add back variants that were excluded due to missing feature values
-        if len(variants_na) > 0:
-            self.variants = pd.concat([self.variants, variants_na], ignore_index=True)
+            self.variants = pd.concat([variants_predicting, variants_na], ignore_index=True)
+
+        elif self.clfparams['classifier'] == 'XGBoostClassifier':
+
+            X = self.prepare_data_for_model(variants_predicting, features)
+
+            variants_predicting['pred_dicast'] = self.model.predict(X)
+            variants_predicting['qual_dicast'] = self.model.predict_proba(X)[:, 1]
+            variants_predicting['qual_dicast'] = variants_predicting['qual_dicast'].apply(lambda x: np.round(x, 2))
+
+            self.variants = variants_predicting.copy().reset_index(drop=True)
+
         
-
     def get_curation_set(self):
         """ Save curation SVs. """
 
@@ -361,8 +417,8 @@ class Dicast:
 
         with open(self.pkl, 'rb') as f:
             self.model = pickle.load(f)
-        
-        
+
+
     def save_model(self):
         """ Save model. """
 
