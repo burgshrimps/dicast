@@ -25,7 +25,7 @@ class AlignmentAnnotatorIllumina:
         self.cov_thr = 6 # Threshold for log2 change in coverage to be considered for feature extraction, otherwise jump
         
         # Alignment file
-        self.alignment_file = replace_filename(params['bam']['ill'], sample, ref)
+        self.alignment_file = replace_filename(params['bam']['mgi'], sample, ref)
         if not os.path.exists(self.alignment_file):
             self.alignment_file = self.alignment_file.replace('-', '_')
         if not os.path.exists(self.alignment_file):
