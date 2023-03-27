@@ -218,8 +218,15 @@ def parse_vcf(vcf, tech, method, sample, svtypes=['DEL', 'INS', 'INV', 'DUP', 'B
 
             # Breakends (Translocations)
             elif rec.info['SVTYPE'] == 'BND':
-                vcf_dict['chrom2'].append(re.search(r'chr.*:', rec.alts[0]).group(0)[:-1])
-                vcf_dict['end'].append(re.search(r':[0-9]*', rec.alts[0]).group(0)[1:])
+                try:
+                    vcf_dict['chrom2'].append(re.search(r'chr.*:', rec.alts[0]).group(0)[:-1])
+                    vcf_dict['end'].append(re.search(r':[0-9]*', rec.alts[0]).group(0)[1:])
+                except AttributeError:
+                    vcf_dict['chrom2'].append(rec.chrom)
+                    if rec.stop == rec.start + 1:
+                        vcf_dict['end'].append(rec.start + 2)
+                    else:
+                        vcf_dict['end'].append(rec.stop)
                 vcf_dict['size'].append(np.nan)
 
             else:
