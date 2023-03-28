@@ -6,6 +6,7 @@ import re
 import bioframe as bf
 from sklearn.metrics import roc_auc_score, precision_recall_curve, roc_curve
 import plotly.express as px
+from tqdm import tqdm
 
 
 from lib.utils import replace_filename, parse_vcf
@@ -27,7 +28,8 @@ class Eva:
         
         self.max_dist_overlap = 500
         self.min_size_overlap = 0.7
-        self.svtypes = ['DEL', 'INS']
+        self.svtypes = ['DEL']
+        self.variants = dict()
 
 
     def read_vcf(self, filename):
@@ -55,6 +57,11 @@ class Eva:
                 vcf_dfs.append(df)
         
         self.variants_methods = pd.concat(vcf_dfs, ignore_index=True)
+        self.variants_methods = self.variants_methods[self.variants_methods['type'].isin(self.svtypes)].copy().reset_index(drop=True)
+
+        # Set quality of cvnator to 1 because it does not have a quality score
+        self.variants_methods.loc[self.variants_methods['method'] == 'cnvnator', 'qual'] = 1
+
 
 
     def read_benchmark_variants(self):
@@ -66,6 +73,9 @@ class Eva:
         self.variants_bench = self.variants_bench[self.variants_bench['samples'].str.contains(self.sample)].copy().reset_index(drop=True)
         self.variants_bench = self.variants_bench[self.variants_bench['chrom'].isin(CHROMS)].copy().reset_index(drop=True)
         self.variants_bench.drop('samples', axis=1, inplace=True)
+        self.variants_bench['confirmed'] = 1
+
+        self.variants_bench = self.variants_bench[self.variants_bench['type'].isin(self.svtypes)].copy().reset_index(drop=True)
 
 
     def read_dicast_variants(self):
@@ -73,20 +83,18 @@ class Eva:
 
         self.variants_dicast = pd.read_csv(self.fname_dicast, sep='\t')
         self.variants_dicast = self.variants_dicast[self.variants_dicast['type'].isin(self.svtypes)].copy().reset_index(drop=True)
-
-        ### TEMPORARY START
-        self.variants_dicast['tech'] = 'mgi'
-        self.variants_dicast = self.variants_dicast[self.variants_dicast['method'] != 'gridss'].copy().reset_index(drop=True)
-        ### TEMPORARY END
-
         self.variants_dicast.rename(columns={'id': 'id_org'}, inplace=True)
 
+        # create unique IDs for dicast variants 
         dicast_variant_dfs = []
         for svtype in self.svtypes:
+
+            # create unique id
             dicast_variants_type = self.variants_dicast.loc[self.variants_dicast['type'] == svtype].copy().reset_index(drop=True)
             dicast_variants_type['index'] = dicast_variants_type.index + 1
             dicast_variants_type['id'] = 'dicast.' + svtype + '.' + dicast_variants_type['index'].astype(str)
             dicast_variant_dfs.append(dicast_variants_type)
+
         self.variants_dicast = pd.concat(dicast_variant_dfs, ignore_index=True)
         self.variants_dicast.drop('index', axis=1, inplace=True)
 
@@ -115,81 +123,64 @@ class Eva:
         return overlapping_svs.reset_index(drop=True)
 
 
-    def overlap_benchmark(self):
-        
-        overlap_ids_methods = []
-        overlap_ids_dicast = []
+    def overlap_bench_methods(self):
+
         for tech in self.fnames_methods:
             for method in self.fnames_methods[tech]:
+
+                dfs = []
                 for svtype in self.svtypes:
-                    curr_method_df = self.variants_methods.loc[(self.variants_methods['tech'] == tech) & (self.variants_methods['method'] == method) & (self.variants_methods['type'] == svtype), ['id', 'chrom', 'start', 'end', 'size']].copy().reset_index(drop=True)
-                    curr_dicast_df = self.variants_dicast.loc[(self.variants_dicast['tech'] == tech) & (self.variants_dicast['method'] == method) & (self.variants_dicast['type'] == svtype), ['id', 'chrom', 'start', 'end', 'size']].copy().reset_index(drop=True)
-                    curr_benchmark_df = self.variants_bench.loc[self.variants_bench['type'] == svtype, ['id', 'chrom', 'start', 'end', 'size']].copy().reset_index(drop=True)
+
+                    curr_bench_df = self.variants_bench[self.variants_bench['type'] == svtype].copy().reset_index(drop=True)
+                    curr_method_df = self.variants_methods[(self.variants_methods['type'] == svtype) & (self.variants_methods['method'] == method)].copy().reset_index(drop=True)
+
+                    overlap_bench_method = self.extract_overlap_ids(curr_bench_df, curr_method_df)
+                    ids_bench = overlap_bench_method['id_1'].unique()
+                    ids_method = overlap_bench_method['id_2'].unique()
+                    benchmark_method = overlap_bench_method.groupby('id_1').agg({'chrom_1' : 'first', 'start_1' : 'first', 'end_1' : 'first',
+                                                                                 'type_1' : 'first', 'size_1' : 'first', 'confirmed_1' : 'first',
+                                                                                 'qual_2' : max}).reset_index()
+                    benchmark_method.columns = ['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual']
+
+                    adding_bench = curr_bench_df[~curr_bench_df['id'].isin(ids_bench)].copy()
+                    adding_bench['qual'] = 0
+
+                    adding_method = curr_method_df[~curr_method_df['id'].isin(ids_method)].copy()
+                    adding_method['confirmed'] = 0
+                    adding_method = adding_method[['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual']]
+
+                    dfs.append(pd.concat([benchmark_method, adding_bench, adding_method], ignore_index=True))
+
+                self.variants[method] = pd.concat(dfs, axis=0, ignore_index=True)
 
 
-                    if not curr_method_df.empty and not curr_benchmark_df.empty:
-                        curr_method_df['end'] = curr_method_df['end'].astype(int)
-                        curr_dicast_df['end'] = curr_dicast_df['end'].astype(int)
-                        curr_benchmark_df['end'] = curr_benchmark_df['end'].astype(int)
 
-                        curr_overlap_ids_method = self.extract_overlap_ids(curr_benchmark_df, curr_method_df)
-                        curr_overlap_ids_dicast = self.extract_overlap_ids(curr_benchmark_df, curr_dicast_df)
+    def overlap_bench_dicast(self):
 
-                        curr_overlap_ids_method['tech'] = tech
-                        curr_overlap_ids_method['method'] = method
-                        curr_overlap_ids_method['type'] = svtype
-                        curr_overlap_ids_dicast['tech'] = tech
-                        curr_overlap_ids_dicast['method'] = method
-                        curr_overlap_ids_dicast['type'] = svtype
+        dfs = []
+        for svtype in self.svtypes:
 
-                        overlap_ids_methods.append(curr_overlap_ids_method)
-                        overlap_ids_dicast.append(curr_overlap_ids_dicast)
-        self.overlap_ids_methods = pd.concat(overlap_ids_methods, ignore_index=True)
-        self.overlap_ids_dicast = pd.concat(overlap_ids_dicast, ignore_index=True)
+            curr_bench_df = self.variants_bench[self.variants_bench['type'] == svtype].copy().reset_index(drop=True)
+            curr_dicast_df = self.variants_dicast[self.variants_dicast['type'] == svtype].copy().reset_index(drop=True)
 
+            overlap_bench_dicast = self.extract_overlap_ids(curr_bench_df, curr_dicast_df)
+            ids_bench = overlap_bench_dicast['id_1'].unique()
+            ids_dicast = overlap_bench_dicast['id_2'].unique() 
+            benchmark_dicast = overlap_bench_dicast.groupby('id_1').agg({'chrom_1' : 'first', 'start_1' : 'first', 'end_1' : 'first', 
+                                                                        'type_1' : 'first', 'size_1' : 'first', 'confirmed_1' : 'first',
+                                                                        'qual_dicast_2' : max}).reset_index()
+            benchmark_dicast.columns = ['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual_dicast']
 
-    def confirm_variants(self):
+            adding_bench = curr_bench_df[~curr_bench_df['id'].isin(ids_bench)].copy()
+            adding_bench['qual_dicast'] = 0
+
+            adding_dicast = curr_dicast_df[~curr_dicast_df['id'].isin(ids_dicast)].copy()
+            adding_dicast['confirmed'] = 0
+            adding_dicast = adding_dicast[['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual_dicast']]
+
+            dfs.append(pd.concat([benchmark_dicast, adding_bench, adding_dicast], axis=0, ignore_index=True))
         
-        method_dfs = []
-        dicast_dfs = []
-        for tech in self.fnames_methods:
-            for method in self.fnames_methods[tech]:
-                for svtype in self.svtypes:
-                    curr_method_df = self.variants_methods[(self.variants_methods['tech'] == tech) & (self.variants_methods['method'] == method) & (self.variants_methods['type'] == svtype)].copy().reset_index(drop=True)
-                    curr_dicast_df = self.variants_dicast[(self.variants_dicast['tech'] == tech) & (self.variants_dicast['method'] == method) & (self.variants_dicast['type'] == svtype)].copy().reset_index(drop=True)
-                    curr_overlap_ids_methods = self.overlap_ids_methods[(self.overlap_ids_methods['tech'] == tech) & (self.overlap_ids_methods['method'] == method) & (self.overlap_ids_methods['type'] == svtype)].copy().reset_index(drop=True)
-                    curr_overlap_ids_dicast = self.overlap_ids_dicast[(self.overlap_ids_dicast['tech'] == tech) & (self.overlap_ids_dicast['method'] == method) & (self.overlap_ids_dicast['type'] == svtype)].copy().reset_index(drop=True)
-
-                    curr_method_df['confirmed'] = 0
-                    curr_method_df.loc[curr_method_df['id'].isin(curr_overlap_ids_methods['id_2']), 'confirmed'] = 1
-                    method_dfs.append(curr_method_df)
-
-                    curr_dicast_df['confirmed'] = 0
-                    curr_dicast_df.loc[curr_dicast_df['id'].isin(curr_overlap_ids_dicast['id_2']), 'confirmed'] = 1
-                    dicast_dfs.append(curr_dicast_df)
-
-        self.variants_methods = pd.concat(method_dfs, ignore_index=True)
-        self.variants_dicast = pd.concat(dicast_dfs, ignore_index=True)
-
-        self.variants = dict()
-
-        # Dicast
-        self.variants['dicast'] = self.variants_dicast[['id', 'qual_dicast', 'confirmed', 'type']].rename(columns={'qual_dicast': 'qual'})
-        variants_missed_dicast = self.variants_bench.loc[~self.variants_bench['id'].isin(self.overlap_ids_dicast['id_1']), ['id', 'type']]
-        variants_missed_dicast['confirmed'] = 1
-        variants_missed_dicast['qual'] = 0
-        self.variants['dicast'] = pd.concat([self.variants['dicast'], variants_missed_dicast], ignore_index=True)
-
-        # Methods
-        for tech in self.fnames_methods:
-            for method in self.fnames_methods[tech]:
-                curr_variants = self.variants_methods.loc[(self.variants_methods['tech'] == tech) & (self.variants_methods['method'] == method), ['id', 'qual', 'confirmed', 'type']].copy()
-                self.variants[tech + '_' + method] = curr_variants
-
-                variants_missed = self.variants_bench.loc[~self.variants_bench['id'].isin(self.overlap_ids_methods.loc[(self.overlap_ids_methods['tech'] == tech) & (self.overlap_ids_methods['method'] == method), 'id_1']), ['id', 'type']]
-                variants_missed['confirmed'] = 1
-                variants_missed['qual'] = 0
-                self.variants[tech + '_' + method] = pd.concat([self.variants[tech + '_' + method], variants_missed], ignore_index=True)
+        self.variants['dicast'] = pd.concat(dfs, axis=0, ignore_index=True).rename(columns={'qual_dicast' : 'qual'})
 
 
     def compute_precision_recall_df(self):
@@ -211,38 +202,6 @@ class Eva:
                 pr_rc_dict['recall'].extend(recall[1:])
         
         self.precision_recall_df = pd.DataFrame(pr_rc_dict)
-
-
-    def plot_precision_recall_curve(self, svtype):
-        """ Plot precision recall curve. 
-
-        param pr_rc_df: pandas dataframe with precision and recall for different thresholds """
-
-        pr_rc_df = self.precision_recall_df[self.precision_recall_df['type'] == svtype].copy().reset_index(drop=True)
-
-        colors = ['black', '#1f77b4', '#ff7f0e', 'darkred', '#1f77b4', '#ff7f0e', 'darkred']
-        dash = ['solid', 'solid', 'solid', 'solid', 'dot', 'dot', 'dot']
-        circle_bg_white = [0, 0, 0, 1, 1, 1, 1]
-        fig = px.line(x='recall', y='precision', color='method', 
-                    data_frame=pr_rc_df, line_dash='method', 
-                    line_dash_sequence=dash,
-                    color_discrete_sequence=colors)
-
-
-        for i, method in enumerate(self.variants.keys()):
-            x = pr_rc_df[pr_rc_df['method'] == method].reset_index(drop=True).loc[0, 'recall']
-            y = pr_rc_df[pr_rc_df['method'] == method].reset_index(drop=True).loc[0, 'precision']
-            if circle_bg_white[i] == 1:
-                fig.add_shape(type='circle', xref='x', yref='y', x0=x-0.002, y0=y-0.015, x1=x+0.003, y1=y+0.005, line_color=colors[i], line_width=2, opacity=1, fillcolor='white')
-            else:
-                fig.add_shape(type='circle', xref='x', yref='y', x0=x-0.002, y0=y-0.015, x1=x+0.003, y1=y+0.005, line_color=colors[i], line_width=2, opacity=1, fillcolor=colors[i])
-
-
-        fig.update_layout(plot_bgcolor='white', xaxis_title='Recall', yaxis_title='Precision', xaxis_linecolor='black', yaxis_linecolor='black')
-        fig.update_traces(line=dict(width=2))
-        fig.update_xaxes(ticks='outside', tickcolor='black', tickwidth=1, ticklen=5, gridcolor='lightgray', gridwidth=0.5, range=[0, 1.1])
-        fig.update_yaxes(ticks='outside', tickcolor='black', tickwidth=1, ticklen=5, gridcolor='lightgray', gridwidth=0.5, range=[0, 1.1])
-        fig.show()
 
         
 

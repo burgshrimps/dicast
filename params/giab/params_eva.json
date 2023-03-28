@@ -1,15 +1,17 @@
 {
     "sample" : "NA24385",
     "ref" : "hg38",
-    "dicast" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/dicast/NA24385.dicast.tsv",
-    "benchmark" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/variants_freeze4_sv_insdel.tsv",
+    "dicast" : "/project/Variation/detection/svc/calls/dicast/GRCh38/HG002/HG002.dicast.tsv",
+    "benchmark" : "/project/Variation/detection/svc/calls/benchmark/GRCh38/HG002/variants_freeze4_sv_insdel.tsv",
     "vcf" : 
     {
         "mgi" :
         {
-            "delly" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/delly/GRCh38/HG002_MGI/formatted_variants.vcf",
-            "manta" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/manta/GRCh38/HG002_MGI/formatted_variants.vcf",
-            "lumpy" : "/confidential/tGenVar/scripts/tGenVar/dicast/giab/lumpy/GRCh38/HG002_MGI/formatted_variants.vcf"
+            "delly" : "/project/Variation/detection/svc/calls/delly/GRCh38/HG002/mgi/formatted_variants.vcf.gz",
+            "manta" : "/project/Variation/detection/svc/calls/manta/GRCh38/HG002/mgi/formatted_variants.vcf.gz",
+            "lumpy" : "/project/Variation/detection/svc/calls/lumpy/GRCh38/HG002/mgi/formatted_variants.vcf.gz",
+            "gridss" : "/project/Variation/detection/svc/calls/gridss/GRCh38/HG002/mgi/formatted_variants.vcf.gz",
+            "cnvnator" : "/project/Variation/detection/svc/calls/cnvnator/GRCh38/HG002/mgi/formatted_variants.vcf.gz"
         }
     }
 }
