@@ -3,6 +3,8 @@
     "ref" : "hg38",
     "dicast" : "/project/Variation/detection/svc/calls/dicast/GRCh38/HG002/HG002.dicast.tsv",
     "benchmark" : "/project/Variation/detection/svc/calls/benchmark/GRCh38/HG002/variants_freeze4_sv_insdel.tsv",
+    "curation_root" : "/project/Variation/detection/svc/curation/GRCh38/HG002",
+    "curation_date" : "20230412",
     "vcf" : 
     {
         "mgi" :
@@ -12,6 +14,11 @@
             "lumpy" : "/project/Variation/detection/svc/calls/lumpy/GRCh38/HG002/mgi/formatted_variants.vcf.gz",
             "gridss" : "/project/Variation/detection/svc/calls/gridss/GRCh38/HG002/mgi/formatted_variants.vcf.gz",
             "cnvnator" : "/project/Variation/detection/svc/calls/cnvnator/GRCh38/HG002/mgi/formatted_variants.vcf.gz"
+        },
+
+        "pb_clr" :
+        {
+            "sniffles" : "/project/Variation/detection/svc/calls/sniffles/GRCh38/HG002/pb_clr/formatted_variants.vcf.gz"
         }
     }
 }

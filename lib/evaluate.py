@@ -7,6 +7,8 @@ import bioframe as bf
 from sklearn.metrics import roc_auc_score, precision_recall_curve, roc_curve
 import plotly.express as px
 from tqdm import tqdm
+from datetime import datetime
+from glob import glob
 
 
 from lib.utils import replace_filename, parse_vcf
@@ -24,6 +26,8 @@ class Eva:
         self.ref = params['ref']
         self.fname_dicast = params['dicast']
         self.fname_benchmark = params['benchmark']
+        self.cur_root = params['curation_root']
+        self.cur_date = params['curation_date']
         self.fnames_methods = params['vcf']
         
         self.max_dist_overlap = 500
@@ -76,6 +80,47 @@ class Eva:
         self.variants_bench['confirmed'] = 1
 
         self.variants_bench = self.variants_bench[self.variants_bench['type'].isin(self.svtypes)].copy().reset_index(drop=True)
+
+
+    def correct_benchmark(self):
+        """ Corrects benchmark variants using manual curation. """
+
+        # Get filenames of curation results
+        cur_fp = glob(f'{self.cur_root}/{self.cur_date}/*/FP/*/*curated.tsv')
+        cur_fn = glob(f'{self.cur_root}/{self.cur_date}/*/FN/*/*curated.tsv')
+
+        # RGet IDs of FNs
+        fn_dfs = []
+        for fname in cur_fn:
+            fn_dfs.append(pd.read_csv(fname, sep='\t'))
+        fn_df = pd.concat(fn_dfs)
+        fn_ids = fn_df.loc[fn_df['Confirmed (Nico)'] == False, 'id'].to_list()
+
+        # Remove FNs from benchmark
+        self.variants_bench = self.variants_bench[~self.variants_bench['id'].isin(fn_ids)].copy().reset_index(drop=True)
+
+        # Read FPs
+        fp_dfs = []
+        for fname in cur_fp:
+            fp_dfs.append(pd.read_csv(fname, sep='\t'))
+        fp_df = pd.concat(fp_dfs)
+        fp_df = fp_df[fp_df['Confirmed (Nico)'] == True].copy().reset_index(drop=True)
+        fp_df.drop(['qual', 'Confirmed (Nico)'], axis=1, inplace=True)
+        fp_df['confirmed'] = 1
+
+        # Add FPs to benchmark
+        self.variants_bench = pd.concat([self.variants_bench, fp_df], ignore_index=True)
+
+        # Merge overlapping calls from benchmark
+        self.variants_bench = bf.cluster(self.variants_bench).groupby('cluster').agg({'id' : 'first', 'chrom' : 'first', 'type' : 'first', 'confirmed' : 'first', 
+                                                            'cluster_start' : 'first', 'cluster_end' : 'first'}).reset_index(drop=True).rename(columns={'cluster_start' : 'start', 'cluster_end' : 'end'})
+        self.variants_bench['size'] = self.variants_bench['end'] - self.variants_bench['start']
+        self.variants_bench['id'] = self.variants_bench['chrom'] + '-' + self.variants_bench['type'] + '-' + self.variants_bench['start'].astype(str) + '-' + self.variants_bench['end'].astype(str) + '-' + self.variants_bench['size'].astype(int).astype(str)
+
+        # Reorder columns
+        self.variants_bench = self.variants_bench[['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed']].copy().reset_index(drop=True)
+
+
 
 
     def read_dicast_variants(self):
@@ -134,12 +179,12 @@ class Eva:
                     curr_bench_df = self.variants_bench[self.variants_bench['type'] == svtype].copy().reset_index(drop=True)
                     curr_method_df = self.variants_methods[(self.variants_methods['type'] == svtype) & (self.variants_methods['method'] == method)].copy().reset_index(drop=True)
 
-                    overlap_bench_method = self.extract_overlap_ids(curr_bench_df, curr_method_df)
-                    ids_bench = overlap_bench_method['id_1'].unique()
-                    ids_method = overlap_bench_method['id_2'].unique()
-                    benchmark_method = overlap_bench_method.groupby('id_1').agg({'chrom_1' : 'first', 'start_1' : 'first', 'end_1' : 'first',
-                                                                                 'type_1' : 'first', 'size_1' : 'first', 'confirmed_1' : 'first',
-                                                                                 'qual_2' : max}).reset_index()
+                    overlap_bench_method = self.extract_overlap_ids(curr_method_df, curr_bench_df)
+                    ids_bench = overlap_bench_method['id_2'].unique()
+                    ids_method = overlap_bench_method['id_1'].unique()
+                    benchmark_method = overlap_bench_method.groupby('id_1').agg({'chrom_2' : 'first', 'start_2' : 'first', 'end_2' : 'first',
+                                                                                 'type_2' : 'first', 'size_2' : 'first', 'confirmed_2' : 'first',
+                                                                                 'qual_1' : max}).reset_index()
                     benchmark_method.columns = ['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual']
 
                     adding_bench = curr_bench_df[~curr_bench_df['id'].isin(ids_bench)].copy()
@@ -163,12 +208,12 @@ class Eva:
             curr_bench_df = self.variants_bench[self.variants_bench['type'] == svtype].copy().reset_index(drop=True)
             curr_dicast_df = self.variants_dicast[self.variants_dicast['type'] == svtype].copy().reset_index(drop=True)
 
-            overlap_bench_dicast = self.extract_overlap_ids(curr_bench_df, curr_dicast_df)
-            ids_bench = overlap_bench_dicast['id_1'].unique()
-            ids_dicast = overlap_bench_dicast['id_2'].unique() 
-            benchmark_dicast = overlap_bench_dicast.groupby('id_1').agg({'chrom_1' : 'first', 'start_1' : 'first', 'end_1' : 'first', 
-                                                                        'type_1' : 'first', 'size_1' : 'first', 'confirmed_1' : 'first',
-                                                                        'qual_dicast_2' : max}).reset_index()
+            overlap_bench_dicast = self.extract_overlap_ids(curr_dicast_df, curr_bench_df)
+            ids_bench = overlap_bench_dicast['id_2'].unique()
+            ids_dicast = overlap_bench_dicast['id_1'].unique() 
+            benchmark_dicast = overlap_bench_dicast.groupby('id_2').agg({'chrom_2' : 'first', 'start_2' : 'first', 'end_2' : 'first', 
+                                                                        'type_2' : 'first', 'size_2' : 'first', 'confirmed_2' : 'first',
+                                                                        'qual_dicast_1' : max}).reset_index()
             benchmark_dicast.columns = ['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual_dicast']
 
             adding_bench = curr_bench_df[~curr_bench_df['id'].isin(ids_bench)].copy()
@@ -195,13 +240,50 @@ class Eva:
         for method in self.variants:
             for svtype in self.svtypes:
                 df = self.variants[method][self.variants[method]['type'] == svtype].copy().reset_index(drop=True)
-                precision, recall, _ = precision_recall_curve(df['confirmed'], df['qual'])
+                precision, recall, _ = precision_recall_curve(df['confirmed'].astype(int), df['qual'].astype(float))
                 pr_rc_dict['method'].extend([method] * (len(precision) - 1))
                 pr_rc_dict['type'].extend([svtype] * (len(precision) - 1))
                 pr_rc_dict['precision'].extend(precision[1:])
                 pr_rc_dict['recall'].extend(recall[1:])
         
         self.precision_recall_df = pd.DataFrame(pr_rc_dict)
+
+
+    def create_manual_qc_tables(self, chunk_size=200):
+        """ Create tables with SVs sent for manual QC. """
+
+        dt = datetime.today().strftime('%Y%m%d')
+
+        fp_variants = self.variants['dicast'][(self.variants['dicast']['confirmed'] == 0) & (self.variants['dicast']['qual'] > 0.4)].copy().reset_index(drop=True)
+        fn_variants = self.variants['dicast'][(self.variants['dicast']['confirmed'] == 1) & (self.variants['dicast']['qual'] < 0.4)].copy().reset_index(drop=True)
+
+        # False Positives
+        for svtype in self.svtypes:
+            fp_variants_type = fp_variants[fp_variants['type'] == svtype].copy().reset_index(drop=True)
+            chunk_fp = 0
+            for i in range(0, len(fp_variants_type), chunk_size):
+                chunk_dir = os.path.join(self.cur_root, dt, svtype, 'FP', f'chunk_{chunk_fp}')
+                chunk_fname = dt + '_FP_' + svtype + f'_chunk_{chunk_fp}.tsv'
+                os.makedirs(chunk_dir, exist_ok=True)
+                fp_variants_type[i:i+chunk_size].to_csv(os.path.join(chunk_dir, chunk_fname), sep='\t', index=False)
+                chunk_fp += 1
+
+        # False Negatives
+        for svtype in self.svtypes:
+            fn_variants_type = fn_variants[fn_variants['type'] == svtype].copy().reset_index(drop=True)
+            chunk_fn = 0
+            for i in range(0, len(fn_variants_type), chunk_size):
+                chunk_dir = os.path.join(self.cur_root, dt, svtype, 'FN', f'chunk_{chunk_fn}')
+                chunk_fname = dt + '_FN_' + svtype + f'_chunk_{chunk_fn}.tsv'
+                os.makedirs(chunk_dir, exist_ok=True)
+                fn_variants_type[i:i+chunk_size].to_csv(os.path.join(chunk_dir, chunk_fname), sep='\t', index=False)
+                chunk_fn += 1
+
+
+
+
+
+
 
         
 

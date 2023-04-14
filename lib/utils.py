@@ -7,6 +7,7 @@ from matplotlib import gridspec
 import pandas as pd
 import pysam
 import os
+from tqdm import tqdm
 import re
 
 
