@@ -34,6 +34,7 @@ class Eva:
         self.min_size_overlap = 0.7
         self.svtypes = ['DEL']
         self.variants = dict()
+        self.variants_filtered = dict()
 
 
     def read_vcf(self, filename):
@@ -82,7 +83,7 @@ class Eva:
         self.variants_bench = self.variants_bench[self.variants_bench['type'].isin(self.svtypes)].copy().reset_index(drop=True)
 
 
-    def correct_benchmark(self):
+    def correct_benchmark_variants(self):
         """ Corrects benchmark variants using manual curation. """
 
         # Get filenames of curation results
@@ -94,6 +95,7 @@ class Eva:
         for fname in cur_fn:
             fn_dfs.append(pd.read_csv(fname, sep='\t'))
         fn_df = pd.concat(fn_dfs)
+        self.fn_df = fn_df
         fn_ids = fn_df.loc[fn_df['Confirmed (Nico)'] == False, 'id'].to_list()
 
         # Remove FNs from benchmark
@@ -104,6 +106,7 @@ class Eva:
         for fname in cur_fp:
             fp_dfs.append(pd.read_csv(fname, sep='\t'))
         fp_df = pd.concat(fp_dfs)
+        self.fp_df = fp_df
         fp_df = fp_df[fp_df['Confirmed (Nico)'] == True].copy().reset_index(drop=True)
         fp_df.drop(['qual', 'Confirmed (Nico)'], axis=1, inplace=True)
         fp_df['confirmed'] = 1
@@ -155,15 +158,13 @@ class Eva:
         df1['end'] = df1['end'].astype(int)
         df2['end'] = df2['end'].astype(int)
 
-        closest_intervals = bf.closest(df1, df2, suffixes=('_1','_2'), k=10) # k=25 to get all overlapping variants
+        closest_intervals = bf.closest(df1, df2, suffixes=('_1','_2'), k=10) # k=10 to get all overlapping variants
         closest_intervals = closest_intervals.dropna(subset=['id_1', 'id_2']).reset_index(drop=True)
         closest_intervals['diff_start'] = abs(closest_intervals['start_1'] - closest_intervals['start_2'])
         closest_intervals['diff_end'] = abs(closest_intervals['end_1'] - closest_intervals['end_2'])
         closest_intervals['diff_size'] = closest_intervals.apply(lambda x: min([x['size_1'], x['size_2']]) / max([x['size_1'], x['size_2']]), axis=1)
 
         overlapping_svs = closest_intervals[(closest_intervals['diff_start'] < self.max_dist_overlap) & (closest_intervals['diff_end'] < self.max_dist_overlap) & (closest_intervals['diff_size'] > self.min_size_overlap)].copy()
-        
-        #overlapping_svs = closest_intervals
 
         return overlapping_svs.reset_index(drop=True)
 
@@ -184,19 +185,48 @@ class Eva:
                     ids_method = overlap_bench_method['id_1'].unique()
                     benchmark_method = overlap_bench_method.groupby('id_1').agg({'chrom_2' : 'first', 'start_2' : 'first', 'end_2' : 'first',
                                                                                  'type_2' : 'first', 'size_2' : 'first', 'confirmed_2' : 'first',
-                                                                                 'qual_1' : max}).reset_index()
-                    benchmark_method.columns = ['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual']
+                                                                                 'qual_1' : max, 'filter_1' : list, 'id_2' : list}).reset_index()
+                    benchmark_method.columns = ['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual', 'filter', 'id_bench']
 
+                    # those not called by the method but confirmed
                     adding_bench = curr_bench_df[~curr_bench_df['id'].isin(ids_bench)].copy()
                     adding_bench['qual'] = 0
-
+                    adding_bench['id_bench'] = adding_bench['id']
+                    adding_bench['id_bench'] = adding_bench['id_bench'].apply(lambda x: [x])
+                    adding_bench['filter'] = 'PASS'
+                    adding_bench['filter'] = adding_bench['filter'].apply(lambda x: [x])
+                    
+                    # those called by the method but not confirmed
                     adding_method = curr_method_df[~curr_method_df['id'].isin(ids_method)].copy()
                     adding_method['confirmed'] = 0
-                    adding_method = adding_method[['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual']]
+                    adding_method['id_bench'] = np.nan
+                    adding_method['id_bench'] = adding_method['id_bench'].apply(lambda x: [x])
+                    adding_method['filter'] = adding_method['filter'].apply(lambda x: [x])
+                    adding_method = adding_method[['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual', 'filter', 'id_bench']]
 
                     dfs.append(pd.concat([benchmark_method, adding_bench, adding_method], ignore_index=True))
 
                 self.variants[method] = pd.concat(dfs, axis=0, ignore_index=True)
+
+                # normalize quality score
+                self.variants[method]['qual'] = self.variants[method]['qual'] / self.variants[method]['qual'].max()
+
+
+    def filter_variants(self):
+        """ Filters variants based on quality and filter """
+
+        # Filter dicast variants
+        self.variants_filtered['dicast'] = self.variants['dicast'].copy().reset_index(drop=True)
+        self.variants_filtered['dicast'].loc[self.variants_filtered['dicast']['qual'] < 0.4, 'qual'] = 0
+        self.variants_filtered['dicast'].loc[self.variants_filtered['dicast']['size'] < 50, 'qual'] = 0
+
+        # Filter methods variants
+        for tech in self.fnames_methods:
+            for method in self.fnames_methods[tech]:
+                self.variants_filtered[method] = self.variants[method].copy().reset_index(drop=True)
+                filter_mask = self.variants_filtered[method]['filter'].apply(lambda x: 'PASS' not in x)
+                self.variants_filtered[method].loc[filter_mask, 'qual'] = 0
+                self.variants_filtered[method].loc[self.variants_filtered[method]['size'] < 50, 'qual'] = 0
 
 
 
@@ -228,22 +258,33 @@ class Eva:
         self.variants['dicast'] = pd.concat(dfs, axis=0, ignore_index=True).rename(columns={'qual_dicast' : 'qual'})
 
 
-    def compute_precision_recall_df(self):
+    def compute_precision_recall_df(self, filtered=False):
         """ Compute precision and recall for different thresholds. 
         
         param df_eval: pandas dataframe with evaluation info
         
         return: pandas dataframe with precision and recall for different thresholds """
 
-        pr_rc_dict = {'method' : [], 'precision' : [], 'recall' : [], 'type' : []}
+        pr_rc_dict = {'method' : [], 'precision' : [], 'recall' : [], 'type' : [], 'thresholds' : []}
 
-        for method in self.variants:
+        if filtered:
+            variants = self.variants_filtered
+        else:
+            variants = self.variants
+
+        for method in variants:
             for svtype in self.svtypes:
-                df = self.variants[method][self.variants[method]['type'] == svtype].copy().reset_index(drop=True)
-                precision, recall, _ = precision_recall_curve(df['confirmed'].astype(int), df['qual'].astype(float))
-                pr_rc_dict['method'].extend([method] * (len(precision) - 1))
+                df = variants[method][variants[method]['type'] == svtype].copy().reset_index(drop=True)
+                precision, recall, thresholds = precision_recall_curve(df['confirmed'].astype(int), df['qual'].astype(float))
+
+                if filtered:
+                    pr_rc_dict['method'].extend([method + ' (f)'] * (len(precision) - 1))
+                else:
+                    pr_rc_dict['method'].extend([method] * (len(precision) - 1))
+
                 pr_rc_dict['type'].extend([svtype] * (len(precision) - 1))
                 pr_rc_dict['precision'].extend(precision[1:])
+                pr_rc_dict['thresholds'].extend(thresholds)
                 pr_rc_dict['recall'].extend(recall[1:])
         
         self.precision_recall_df = pd.DataFrame(pr_rc_dict)
@@ -256,6 +297,9 @@ class Eva:
 
         fp_variants = self.variants['dicast'][(self.variants['dicast']['confirmed'] == 0) & (self.variants['dicast']['qual'] > 0.4)].copy().reset_index(drop=True)
         fn_variants = self.variants['dicast'][(self.variants['dicast']['confirmed'] == 1) & (self.variants['dicast']['qual'] < 0.4)].copy().reset_index(drop=True)
+
+        self.fp_variants = fp_variants
+        self.fn_variants = fn_variants
 
         # False Positives
         for svtype in self.svtypes:

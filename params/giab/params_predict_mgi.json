@@ -3,7 +3,7 @@
     {
         "samples" : ["HG002"],
         "ref" : "hg38",
-        "variant_features" : "/project/Variation/detection/svc/calls/dicast/GRCh38/HG002/ensemble/HG002_hg38.SVs.annot.tsv",
+        "variant_features" : "/project/Variation/detection/svc/calls/dicast/GRCh38/HG002/ensemble/mgi/HG002_hg38.SVs.annot.tsv",
         "vcf" : 
         {
             "mgi" :
