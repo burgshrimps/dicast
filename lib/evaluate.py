@@ -9,6 +9,7 @@ import plotly.express as px
 from tqdm import tqdm
 from datetime import datetime
 from glob import glob
+from collections import defaultdict
 
 
 from lib.utils import replace_filename, parse_vcf
@@ -183,26 +184,26 @@ class Eva:
                     overlap_bench_method = self.extract_overlap_ids(curr_method_df, curr_bench_df)
                     ids_bench = overlap_bench_method['id_2'].unique()
                     ids_method = overlap_bench_method['id_1'].unique()
-                    benchmark_method = overlap_bench_method.groupby('id_1').agg({'chrom_2' : 'first', 'start_2' : 'first', 'end_2' : 'first',
+                    benchmark_method = overlap_bench_method.groupby('id_2').agg({'chrom_2' : 'first', 'start_2' : 'first', 'end_2' : 'first',
                                                                                  'type_2' : 'first', 'size_2' : 'first', 'confirmed_2' : 'first',
-                                                                                 'qual_1' : max, 'filter_1' : list, 'id_2' : list}).reset_index()
-                    benchmark_method.columns = ['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual', 'filter', 'id_bench']
+                                                                                 'qual_1' : max, 'filter_1' : list, 'id_1' : list}).reset_index()
+                    benchmark_method.columns = ['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual', 'filter', 'id_method']
 
                     # those not called by the method but confirmed
                     adding_bench = curr_bench_df[~curr_bench_df['id'].isin(ids_bench)].copy()
                     adding_bench['qual'] = 0
-                    adding_bench['id_bench'] = adding_bench['id']
-                    adding_bench['id_bench'] = adding_bench['id_bench'].apply(lambda x: [x])
+                    adding_bench['id_method'] = np.nan
+                    adding_bench['id_method'] = adding_bench['id_method'].apply(lambda x: [x])
                     adding_bench['filter'] = 'PASS'
                     adding_bench['filter'] = adding_bench['filter'].apply(lambda x: [x])
                     
                     # those called by the method but not confirmed
                     adding_method = curr_method_df[~curr_method_df['id'].isin(ids_method)].copy()
                     adding_method['confirmed'] = 0
-                    adding_method['id_bench'] = np.nan
-                    adding_method['id_bench'] = adding_method['id_bench'].apply(lambda x: [x])
+                    adding_method['id_method'] = adding_method['id']
+                    adding_method['id_method'] = adding_method['id_method'].apply(lambda x: [x])
                     adding_method['filter'] = adding_method['filter'].apply(lambda x: [x])
-                    adding_method = adding_method[['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual', 'filter', 'id_bench']]
+                    adding_method = adding_method[['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual', 'filter', 'id_method']]
 
                     dfs.append(pd.concat([benchmark_method, adding_bench, adding_method], ignore_index=True))
 
@@ -243,15 +244,20 @@ class Eva:
             ids_dicast = overlap_bench_dicast['id_1'].unique() 
             benchmark_dicast = overlap_bench_dicast.groupby('id_2').agg({'chrom_2' : 'first', 'start_2' : 'first', 'end_2' : 'first', 
                                                                         'type_2' : 'first', 'size_2' : 'first', 'confirmed_2' : 'first',
-                                                                        'qual_dicast_1' : max}).reset_index()
-            benchmark_dicast.columns = ['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual_dicast']
+                                                                        'qual_dicast_1' : max, 'id_1' : list}).reset_index()
+            benchmark_dicast.columns = ['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual_dicast', 'id_dicast']
 
             adding_bench = curr_bench_df[~curr_bench_df['id'].isin(ids_bench)].copy()
             adding_bench['qual_dicast'] = 0
+            adding_bench['id_dicast'] = np.nan
+            adding_bench['id_dicast'] = adding_bench['id_dicast'].apply(lambda x: [x])
+
 
             adding_dicast = curr_dicast_df[~curr_dicast_df['id'].isin(ids_dicast)].copy()
             adding_dicast['confirmed'] = 0
-            adding_dicast = adding_dicast[['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual_dicast']]
+            adding_dicast['id_dicast'] = adding_dicast['id']
+            adding_dicast['id_dicast'] = adding_dicast['id_dicast'].apply(lambda x: [x])
+            adding_dicast = adding_dicast[['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed', 'qual_dicast', 'id_dicast']]
 
             dfs.append(pd.concat([benchmark_dicast, adding_bench, adding_dicast], axis=0, ignore_index=True))
         
@@ -322,6 +328,131 @@ class Eva:
                 os.makedirs(chunk_dir, exist_ok=True)
                 fn_variants_type[i:i+chunk_size].to_csv(os.path.join(chunk_dir, chunk_fname), sep='\t', index=False)
                 chunk_fn += 1
+
+
+    def create_multi_caller_support_table(self, methods):
+        """ For each variant determines which callers support it. """
+
+        df_multi = self.variants_bench.copy().set_index('id')
+        df_multi[methods] = 0
+        for i in range(len(methods)):
+
+            # Get the variants called by the method
+            df_method = self.variants_filtered[methods[i]].copy()
+
+            # Only get confirmed ones and that are actually called by the method. Benchmark variants were added to each method dataframe to calculate the precision and recall.
+            # These need to be removed again. This is done by checking if the method ID is NA.
+            df_method = df_method[(df_method['confirmed'] == 1) & (df_method['qual'] > 0)].set_index('id')
+
+            df_multi.loc[df_multi.index.isin(df_method.index), methods[i]] = df_method['qual']
+
+        df_multi.reset_index(inplace=True)
+
+        # Check which non confirmed variants are called by multiple methods
+        overlap_dfs = []
+        overlap_ids = defaultdict(list)
+        for i in range(len(methods)):
+            for j in range(i+1, len(methods)):
+                df_method1 = self.variants_filtered[methods[i]].copy()
+                df_method2 = self.variants_filtered[methods[j]].copy()
+
+                df_method1 = df_method1[(df_method1['confirmed'] == 0) & (df_method1['qual'] > 0)].reset_index(drop=True)
+                df_method2 = df_method2[(df_method2['confirmed'] == 0) & (df_method2['qual'] > 0)].reset_index(drop=True)
+                overlap_dfs.append(self.extract_overlap_ids(df_method1, df_method2)[['id_1', 'id_2']])
+                overlap_ids[methods[i]].extend(overlap_dfs[-1]['id_1'].tolist())
+                overlap_ids[methods[j]].extend(overlap_dfs[-1]['id_2'].tolist())
+
+        # Add non overlapping variants to df_multi
+        for method in methods:
+            df_method = self.variants_filtered[methods[i]].copy()
+            df_method = df_method[(df_method['confirmed'] == 0) & (df_method['qual'] > 0) & (~df_method['id'].isin(overlap_ids[method]))].reset_index(drop=True)
+            df_method[methods] = 0
+            df_method[method] = df_method['qual']
+            df_method = df_method[['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed'] + methods]
+            df_multi = pd.concat([df_multi, df_method], ignore_index=True)
+
+        # Add non confirmed variants that are called by multiple methods to dataframe
+        already_added_variants = []
+        already_added_variants_map = {}
+        multi_dict = dict()
+        for i in range(len(overlap_dfs)):
+
+            # Get method names
+            method1 = overlap_dfs[i].loc[0]['id_1'].split('.')[0]
+            method2 = overlap_dfs[i].loc[0]['id_2'].split('.')[0]
+
+            # Get method dataframes
+            df_method1 = self.variants_filtered[method1].copy()
+            df_method2 = self.variants_filtered[method2].copy()
+
+            # Iterate over all tuples of overlapping variants
+            for j in range(len(overlap_dfs[i])):
+
+                var_dict = dict()
+                id1 = overlap_dfs[i].loc[j]['id_1']
+                id2 = overlap_dfs[i].loc[j]['id_2']
+
+                if not id1 in already_added_variants and not id2 in already_added_variants:
+
+                    # Get variant dataframes
+                    df_variant1 = df_method1[df_method1['id'] == id1].reset_index(drop=True)
+                    df_variant2 = df_method2[df_method2['id'] == id2].reset_index(drop=True)
+
+                    # Get variant data
+                    var_dict['id'] = id1
+                    var_dict['chrom'] = df_variant1.loc[0]['chrom']
+                    var_dict['start'] = df_variant1.loc[0]['start']
+                    var_dict['end'] = df_variant1.loc[0]['end']
+                    var_dict['type'] = df_variant1.loc[0]['type']
+                    var_dict['size'] = df_variant1.loc[0]['size']
+                    var_dict['confirmed'] = 0
+                    for method in methods:
+                        var_dict[method] = 0
+                    var_dict[method1] = df_variant1.loc[0]['qual']
+                    var_dict[method2] = df_variant2.loc[0]['qual']
+
+                    # Add variant to dataframe
+                    multi_dict[id1] = var_dict
+
+                    # Add variant to already added variants
+                    already_added_variants.append(id1)
+                    already_added_variants.append(id2)
+                    already_added_variants_map[id1] = id1
+                    already_added_variants_map[id2] = id1
+
+                elif id1 in already_added_variants and not id2 in already_added_variants:
+
+                    df_variant2 = df_method2[df_method2['id'] == id2].reset_index(drop=True)
+                    multi_dict[already_added_variants_map[id1]][method2] = df_variant2.loc[0]['qual']
+
+                    # Add variant to already added variants
+                    already_added_variants.append(id2)
+                    already_added_variants_map[id2] = already_added_variants_map[id1]
+
+                elif not id1 in already_added_variants and id2 in already_added_variants:
+
+                    df_variant1 = df_method1[df_method1['id'] == id1].reset_index(drop=True)
+                    multi_dict[already_added_variants_map[id2]][method1] = df_variant1.loc[0]['qual']
+
+                    # Add variant to already added variants
+                    already_added_variants.append(id1)
+                    already_added_variants_map[id1] = already_added_variants_map[id2]
+
+        self.df_multi = pd.concat([df_multi, pd.DataFrame.from_dict(multi_dict, orient='index').reset_index(drop=True)], ignore_index=True)
+
+        # Create individual dataframes for variants supported by at least N callers
+        for i in range(len(methods)):
+            mask = ((self.df_multi[methods] != 0).sum(axis=1) > i) | (self.df_multi['confirmed'] == 1)
+            method_name = 'at least ' + str(i+1) + ' callers'
+
+            self.variants_filtered[method_name] = self.df_multi[mask].copy().reset_index(drop=True)
+            self.variants_filtered[method_name]['qual'] = self.variants_filtered[method_name][methods].sum(axis=1)
+
+            # Set confirmed variants which have < N callers to 0
+            self.variants_filtered[method_name].loc[(self.variants_filtered[method_name]['confirmed'] == 1) & ((self.variants_filtered[method_name][methods] != 0).sum(axis=1) < i+1), 'qual'] = 0
+
+
+
 
 
 
