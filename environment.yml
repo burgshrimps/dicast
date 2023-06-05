@@ -123,5 +123,9 @@ dependencies:
     - tornado==6.1
     - traitlets==5.1.1
     - umap-learn==0.5.2
+    - upsetplot==0.8.0
     - urllib3==1.26.8
+    - visidata==2.11
     - wcwidth==0.2.5
+    - xgboost==1.7.4
+prefix: /project/haplotyping/nico/tools/miniconda2/envs/svlearn

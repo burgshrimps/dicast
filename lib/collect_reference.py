@@ -48,20 +48,28 @@ class ReferenceAnnotator:
         self.df_alt_haps = pd.read_csv('/'.join([self.ref_dir, self.filename_alt_haps]), sep='\t')
 
         # Split annotation dataframes into chromosomal and interchromosomal
-        df_bnd_chrom1 = self.df_calls_annot.loc[self.df_calls_annot['type'] == 'BND'].copy().reset_index(drop=True)
-        df_bnd_chrom2 = self.df_calls_annot.loc[self.df_calls_annot['type'] == 'BND'].copy().reset_index(drop=True)
-        self.df_calls_annot = self.df_calls_annot.loc[self.df_calls_annot['type'] != 'BND'].copy().reset_index(drop=True)
+        if 'BND' in self.df_calls_annot['type'].unique():
+            
+            self.split_bnd = True
 
-        df_bnd_chrom1['end'] = df_bnd_chrom1['start'] + 50
-        df_bnd_chrom1['start'] = df_bnd_chrom1['start'] - 50
-        df_bnd_chrom1.drop('chrom2', axis=1, inplace=True)
-        self.df_calls_annot_bnd1 = df_bnd_chrom1
+            df_bnd_chrom1 = self.df_calls_annot.loc[self.df_calls_annot['type'] == 'BND'].copy().reset_index(drop=True)
+            df_bnd_chrom2 = self.df_calls_annot.loc[self.df_calls_annot['type'] == 'BND'].copy().reset_index(drop=True)
+            self.df_calls_annot = self.df_calls_annot.loc[self.df_calls_annot['type'] != 'BND'].copy().reset_index(drop=True)
 
-        df_bnd_chrom2['chrom'] = df_bnd_chrom2['chrom2']
-        df_bnd_chrom2['start'] = df_bnd_chrom2['end'] - 50
-        df_bnd_chrom2['end'] = df_bnd_chrom2['end'] + 50
-        df_bnd_chrom2.drop('chrom2', axis=1, inplace=True)
-        self.df_calls_annot_bnd2 = df_bnd_chrom2
+            df_bnd_chrom1['end'] = df_bnd_chrom1['start'] + 50
+            df_bnd_chrom1['start'] = df_bnd_chrom1['start'] - 50
+            df_bnd_chrom1.drop('chrom2', axis=1, inplace=True)
+            self.df_calls_annot_bnd1 = df_bnd_chrom1
+
+            df_bnd_chrom2['chrom'] = df_bnd_chrom2['chrom2']
+            df_bnd_chrom2['start'] = df_bnd_chrom2['end'] - 50
+            df_bnd_chrom2['end'] = df_bnd_chrom2['end'] + 50
+            df_bnd_chrom2.drop('chrom2', axis=1, inplace=True)
+            self.df_calls_annot_bnd2 = df_bnd_chrom2
+
+        else:
+
+            self.split_bnd = False
 
 
     def annotate_repeats(self):
@@ -79,17 +87,19 @@ class ReferenceAnnotator:
             df_closest = bf.closest(df_svs, df_ref[df_ref['repClass'] == rep_class], return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_' + rep_class})
             self.df_calls_annot = pd.merge(self.df_calls_annot, df_closest[['id_1', 'rep_' + rep_class]], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
-        # Annoate BNDs on first chromosome
-        df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
-        for rep_class in self.df_repeats['repClass'].unique():
-            df_closest = bf.closest(df_svs, df_ref[df_ref['repClass'] == rep_class], return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_' + rep_class})
-            self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'rep_' + rep_class]], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+        if self.split_bnd:
 
-        # Annoate BNDs on second chromosome
-        df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
-        for rep_class in self.df_repeats['repClass'].unique():
-            df_closest = bf.closest(df_svs, df_ref[df_ref['repClass'] == rep_class], return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_' + rep_class})
-            self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'rep_' + rep_class]], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+            # Annoate BNDs on first chromosome
+            df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
+            for rep_class in self.df_repeats['repClass'].unique():
+                df_closest = bf.closest(df_svs, df_ref[df_ref['repClass'] == rep_class], return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_' + rep_class})
+                self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'rep_' + rep_class]], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+
+            # Annoate BNDs on second chromosome
+            df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
+            for rep_class in self.df_repeats['repClass'].unique():
+                df_closest = bf.closest(df_svs, df_ref[df_ref['repClass'] == rep_class], return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_' + rep_class})
+                self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'rep_' + rep_class]], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
 
     def annotate_vntrs(self):
@@ -103,15 +113,17 @@ class ReferenceAnnotator:
         df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_VNTR'})
         self.df_calls_annot = pd.merge(self.df_calls_annot, df_closest[['id_1', 'rep_VNTR']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
-        # Annotate BNDs on first chromosome
-        df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_VNTR'})
-        self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'rep_VNTR']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+        if self.split_bnd:
 
-        # Annotate BNDs on second chromosome
-        df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_VNTR'})
-        self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'rep_VNTR']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+            # Annotate BNDs on first chromosome
+            df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_VNTR'})
+            self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'rep_VNTR']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+
+            # Annotate BNDs on second chromosome
+            df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_VNTR'})
+            self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'rep_VNTR']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
 
     def annotate_strs(self):
@@ -125,15 +137,17 @@ class ReferenceAnnotator:
         df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_STR'})
         self.df_calls_annot = pd.merge(self.df_calls_annot, df_closest[['id_1', 'rep_STR']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
-        # Annotate BNDs on first chromosome
-        df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_STR'})
-        self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'rep_STR']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+        if self.split_bnd:
 
-        # Annotate BNDs on second chromosome
-        df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_STR'})
-        self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'rep_STR']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+            # Annotate BNDs on first chromosome
+            df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_STR'})
+            self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'rep_STR']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+
+            # Annotate BNDs on second chromosome
+            df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy().reset_index(drop=True)
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'rep_STR'})
+            self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'rep_STR']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
 
     def annotate_cpg_islands(self):
@@ -147,15 +161,17 @@ class ReferenceAnnotator:
         df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'cpg_islands'})
         self.df_calls_annot = pd.merge(self.df_calls_annot, df_closest[['id_1', 'cpg_islands']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
-        # Annotate BNDs on first chromosome
-        df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'cpg_islands'})
-        self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'cpg_islands']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+        if self.split_bnd:
 
-        # Annotate BNDs on second chromosome
-        df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'cpg_islands'})
-        self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'cpg_islands']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+            # Annotate BNDs on first chromosome
+            df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'cpg_islands'})
+            self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'cpg_islands']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+
+            # Annotate BNDs on second chromosome
+            df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'cpg_islands'})
+            self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'cpg_islands']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
 
     def annotate_centromeres(self):
@@ -168,16 +184,18 @@ class ReferenceAnnotator:
         df_svs = self.df_calls_annot[['chrom', 'start', 'end', 'id']].copy()
         df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'centromeres'})
         self.df_calls_annot = pd.merge(self.df_calls_annot, df_closest[['id_1', 'centromeres']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+        
+        if self.split_bnd:
 
-        # Annotate BNDs on first chromosome
-        df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'centromeres'})
-        self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'centromeres']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+            # Annotate BNDs on first chromosome
+            df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'centromeres'})
+            self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'centromeres']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
-        # Annotate BNDs on second chromosome
-        df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'centromeres'})
-        self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'centromeres']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+            # Annotate BNDs on second chromosome
+            df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'centromeres'})
+            self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'centromeres']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
 
     def annotate_asmb_gaps(self):
@@ -191,15 +209,17 @@ class ReferenceAnnotator:
         df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'asmb_gaps'})
         self.df_calls_annot = pd.merge(self.df_calls_annot, df_closest[['id_1', 'asmb_gaps']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
-        # Annotate BNDs on first chromosome
-        df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'asmb_gaps'})
-        self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'asmb_gaps']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+        if self.split_bnd:
 
-        # Annotate BNDs on second chromosome
-        df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'asmb_gaps'})
-        self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'asmb_gaps']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+            # Annotate BNDs on first chromosome
+            df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'asmb_gaps'})
+            self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'asmb_gaps']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+
+            # Annotate BNDs on second chromosome
+            df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'asmb_gaps'})
+            self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'asmb_gaps']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
 
     def annotate_alt_haps(self):
@@ -213,15 +233,17 @@ class ReferenceAnnotator:
         df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'alt_haps'})
         self.df_calls_annot = pd.merge(self.df_calls_annot, df_closest[['id_1', 'alt_haps']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
-        # Annotate BNDs on first chromosome
-        df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'alt_haps'})
-        self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'alt_haps']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+        if self.split_bnd:
 
-        # Annotate BNDs on second chromosome
-        df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'alt_haps'})
-        self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'alt_haps']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+            # Annotate BNDs on first chromosome
+            df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'alt_haps'})
+            self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'alt_haps']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+
+            # Annotate BNDs on second chromosome
+            df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'alt_haps'})
+            self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'alt_haps']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
 
     def annotate_genes(self):
@@ -235,15 +257,17 @@ class ReferenceAnnotator:
         df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'genes'})
         self.df_calls_annot = pd.merge(self.df_calls_annot, df_closest[['id_1', 'genes']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
-        # Annotate BNDs on first chromosome
-        df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'genes'})
-        self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'genes']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+        if self.split_bnd:
 
-        # Annotate BNDs on second chromosome
-        df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'genes'})
-        self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'genes']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+            # Annotate BNDs on first chromosome
+            df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'genes'})
+            self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'genes']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+
+            # Annotate BNDs on second chromosome
+            df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'genes'})
+            self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'genes']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
 
     def annotate_orphanet(self):
@@ -257,15 +281,17 @@ class ReferenceAnnotator:
         df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'orphanet'})
         self.df_calls_annot = pd.merge(self.df_calls_annot, df_closest[['id_1', 'orphanet']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
-        # Annotate BNDs on first chromosome
-        df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'orphanet'})
-        self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'orphanet']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+        if self.split_bnd:
 
-        # Annotate BNDs on second chromosome
-        df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
-        df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'orphanet'})
-        self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'orphanet']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+            # Annotate BNDs on first chromosome
+            df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'orphanet'})
+            self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'orphanet']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
+
+            # Annotate BNDs on second chromosome
+            df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
+            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'orphanet'})
+            self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'orphanet']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
 
     def calculate_gc_content(self, row, region):
@@ -283,32 +309,37 @@ class ReferenceAnnotator:
         self.df_calls_annot['GC_content_left'] = self.df_calls_annot.apply(lambda x: self.calculate_gc_content(x, 'start'), axis=1)
         self.df_calls_annot['GC_content_right'] = self.df_calls_annot.apply(lambda x: self.calculate_gc_content(x, 'end'), axis=1)
 
-        self.df_calls_annot_bnd1['GC_content_left'] = self.df_calls_annot_bnd1.apply(lambda x: self.calculate_gc_content(x, 'start'), axis=1)
-        self.df_calls_annot_bnd1['GC_content_right'] = self.df_calls_annot_bnd1.apply(lambda x: self.calculate_gc_content(x, 'end'), axis=1)
+        if self.split_bnd:
 
-        self.df_calls_annot_bnd2['GC_content_left'] = self.df_calls_annot_bnd2.apply(lambda x: self.calculate_gc_content(x, 'start'), axis=1)
-        self.df_calls_annot_bnd2['GC_content_right'] = self.df_calls_annot_bnd2.apply(lambda x: self.calculate_gc_content(x, 'end'), axis=1)
+            self.df_calls_annot_bnd1['GC_content_left'] = self.df_calls_annot_bnd1.apply(lambda x: self.calculate_gc_content(x, 'start'), axis=1)
+            self.df_calls_annot_bnd1['GC_content_right'] = self.df_calls_annot_bnd1.apply(lambda x: self.calculate_gc_content(x, 'end'), axis=1)
+
+            self.df_calls_annot_bnd2['GC_content_left'] = self.df_calls_annot_bnd2.apply(lambda x: self.calculate_gc_content(x, 'start'), axis=1)
+            self.df_calls_annot_bnd2['GC_content_right'] = self.df_calls_annot_bnd2.apply(lambda x: self.calculate_gc_content(x, 'end'), axis=1)
 
 
     def to_csv(self):
         """ Save the dataframe to a csv file. """
 
-        # Add BNDs to main frame
-        self.df_calls_annot_bnd2.rename(columns={'chrom': 'chrom2'}, inplace=True)
-        self.df_calls_annot_bnd1['start'] = self.df_calls_annot_bnd1['start'] + 50
-        self.df_calls_annot_bnd2['end'] = self.df_calls_annot_bnd2['end'] - 50
+        if self.split_bnd:
 
-        self.df_calls_annot_bnd1['GC_content_left'] = (self.df_calls_annot_bnd1['GC_content_left'] + self.df_calls_annot_bnd1['GC_content_right']) / 2
-        self.df_calls_annot_bnd1['GC_content_right'] = np.nan
-        self.df_calls_annot_bnd2['GC_content_right'] = (self.df_calls_annot_bnd2['GC_content_left'] + self.df_calls_annot_bnd2['GC_content_right']) / 2
-        self.df_calls_annot_bnd2['GC_content_left'] = np.nan
+            # Add BNDs to main frame
+            self.df_calls_annot_bnd2.rename(columns={'chrom': 'chrom2'}, inplace=True)
+            self.df_calls_annot_bnd1['start'] = self.df_calls_annot_bnd1['start'] + 50
+            self.df_calls_annot_bnd2['end'] = self.df_calls_annot_bnd2['end'] - 50
 
-        df_calls_annot_bnd = pd.concat([self.df_calls_annot_bnd1, self.df_calls_annot_bnd2], ignore_index=True)
-        df_calls_annot_bnd = df_calls_annot_bnd.groupby('id').agg({'sample': 'first', 'type' : 'first', 'chrom' : 'first', 'chrom2' : 'last', 'start' : 'first', 'end' : 'last',
-                                                                   'rep_LINE' : min, 'rep_SINE' : min, 'rep_LTR' : min, 'rep_DNA' : min, 'rep_Simple_repeat' : min, 'rep_Satellite' : min, 'rep_Low_complexity' : min, 
-                                                                   'rep_Retroposon' : min, 'rep_snRNA' : min, 'rep_tRNA' : min, 'rep_srpRNA' : min, 'rep_rRNA' : min, 'rep_RC' : min, 'rep_scRNA' : min,
-                                                                   'rep_RNA' : min, 'rep_VNTR' : min, 'rep_STR' : min, 'cpg_islands' : min, 'centromeres' : min, 'asmb_gaps' : min, 'alt_haps' : min,
-                                                                   'GC_content_left' : 'first', 'GC_content_right' : 'first'}).reset_index()
+            self.df_calls_annot_bnd1['GC_content_left'] = (self.df_calls_annot_bnd1['GC_content_left'] + self.df_calls_annot_bnd1['GC_content_right']) / 2
+            self.df_calls_annot_bnd1['GC_content_right'] = np.nan
+            self.df_calls_annot_bnd2['GC_content_right'] = (self.df_calls_annot_bnd2['GC_content_left'] + self.df_calls_annot_bnd2['GC_content_right']) / 2
+            self.df_calls_annot_bnd2['GC_content_left'] = np.nan
 
-        self.df_calls_annot = pd.concat([self.df_calls_annot, df_calls_annot_bnd[self.df_calls_annot.columns]], ignore_index=True)
+            df_calls_annot_bnd = pd.concat([self.df_calls_annot_bnd1, self.df_calls_annot_bnd2], ignore_index=True)
+            df_calls_annot_bnd = df_calls_annot_bnd.groupby('id').agg({'sample': 'first', 'type' : 'first', 'chrom' : 'first', 'chrom2' : 'last', 'start' : 'first', 'end' : 'last',
+                                                                    'rep_LINE' : min, 'rep_SINE' : min, 'rep_LTR' : min, 'rep_DNA' : min, 'rep_Simple_repeat' : min, 'rep_Satellite' : min, 'rep_Low_complexity' : min, 
+                                                                    'rep_Retroposon' : min, 'rep_snRNA' : min, 'rep_tRNA' : min, 'rep_srpRNA' : min, 'rep_rRNA' : min, 'rep_RC' : min, 'rep_scRNA' : min,
+                                                                    'rep_RNA' : min, 'rep_VNTR' : min, 'rep_STR' : min, 'cpg_islands' : min, 'centromeres' : min, 'asmb_gaps' : min, 'alt_haps' : min,
+                                                                    'GC_content_left' : 'first', 'GC_content_right' : 'first'}).reset_index()
+
+            self.df_calls_annot = pd.concat([self.df_calls_annot, df_calls_annot_bnd[self.df_calls_annot.columns]], ignore_index=True)
+
         self.df_calls_annot.to_csv(self.filename_variants_ref_annot, index=False, na_rep='NA', sep='\t')

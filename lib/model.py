@@ -151,6 +151,13 @@ class Dicast:
             cohort_dfs.append(cohort_df)
 
         self.variants = pd.concat(cohort_dfs, ignore_index=True)
+        
+        #### QUICK FIX RM LATER
+        self.variants['size'].fillna('', inplace=True)
+        self.variants.loc[self.variants['size'].str.startswith('('), 'size'] = self.variants.loc[self.variants['size'].str.startswith('('), 'size'].str.extract('\(([^,]*),')
+        self.variants['size'].replace('', np.nan, inplace=True)
+        self.variants['size'] = self.variants['size'].astype(float)
+        ############
 
         # Filter based on SV type
         self.variants = self.variants[self.variants['type'] == self.type].copy().reset_index(drop=True)
@@ -345,6 +352,7 @@ class Dicast:
 
         columns = list(variants_predicting.columns[12:]) + ['size']
         features = self.set_features(columns)
+        
 
         # Remove confirmed column if present, this is the case during model curation
         if 'confirmed' in features:

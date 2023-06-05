@@ -1,16 +1,17 @@
 {
     "tgenvar" :
     {
-        "samples" : ["17-08"],
+        "samples" : ["18-5047"],
         "ref" : "hg38",
         "variant_features" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/ensemble/SAMPLE_REF.SVs.annot.tsv",
         "vcf" : 
         {
             "ill" :
             {
-                "delly" : "/confidential/tGenVar/train_dicast_pipeline/results/calls/delly/GRCh38/SAMPLE/formatted_variants.vcf.gz",
-                "manta" : "/confidential/tGenVar/train_dicast_pipeline/results/calls/manta/GRCh38/SAMPLE/formatted_variants.vcf.gz",
-                "lumpy" : "/confidential/tGenVar/train_dicast_pipeline/results/calls/lumpy/GRCh38/SAMPLE/formatted_variants.vcf.gz"
+                "delly" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/filtered_vcfs/delly_sorted_filtered.vcf.gz",
+                "manta" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/filtered_vcfs/manta_sorted_filtered.vcf.gz",
+                "lumpy" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/filtered_vcfs/lumpy_sorted_filtered.vcf.gz",
+                "gridss" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/filtered_vcfs/gridss_sorted_filtered.vcf.gz"
             }
         }
     }
