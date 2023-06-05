@@ -153,10 +153,10 @@ class Dicast:
         self.variants = pd.concat(cohort_dfs, ignore_index=True)
         
         #### QUICK FIX RM LATER
-        self.variants['size'].fillna('', inplace=True)
-        self.variants.loc[self.variants['size'].str.startswith('('), 'size'] = self.variants.loc[self.variants['size'].str.startswith('('), 'size'].str.extract('\(([^,]*),')
-        self.variants['size'].replace('', np.nan, inplace=True)
-        self.variants['size'] = self.variants['size'].astype(float)
+        #self.variants['size'].fillna('', inplace=True)
+        #self.variants.loc[self.variants['size'].str.startswith('('), 'size'] = self.variants.loc[self.variants['size'].str.startswith('('), 'size'].str.extract('\(([^,]*),')
+        #self.variants['size'].replace('', np.nan, inplace=True)
+        #self.variants['size'] = self.variants['size'].astype(float)
         ############
 
         # Filter based on SV type
