@@ -222,6 +222,8 @@ if __name__ == '__main__':
         RA.annotate_alt_haps()
         logging.info('# Annotation GC Content')
         RA.annotate_gc_content()
+        logging.info('# Aggregate Results')
+        RA.aggregate_results()
         logging.info('# Save Reference Features')
         RA.to_csv()
 

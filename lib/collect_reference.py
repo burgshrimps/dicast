@@ -11,7 +11,7 @@ class ReferenceAnnotator:
     """ Object to annotate a set of SV calls based on features obtained from a reference genome. """
 
 
-    def __init__(self, sample, ref, workdir, params):
+    def __init__(self, sample, ref, workdir, params, df_calls=None):
 
         # Meta data
         self.sample = sample
@@ -31,13 +31,20 @@ class ReferenceAnnotator:
         self.filename_asmb_gaps = params['ref'][self.ref]['filename_asmb_gaps']
         self.filename_alt_haps = params['ref'][self.ref]['filename_alt_haps']
 
-        # Variant Files
-        self.filename_variants = self.workdir + '/ensemble/' + self.sample + '_' + self.ref + '.SVs.raw.tsv'
-        self.filename_variants_ref_annot = self.workdir + '/ensemble/' + self.sample + '_' + self.ref + '.SVs.ref.tsv'
+        # Variants are either loaded from file or directly passed to the constructor
+        if df_calls is None:
+            
+            self.filename_variants = self.workdir + '/ensemble/' + self.sample + '_' + self.ref + '.SVs.raw.tsv'
+            self.filename_variants_ref_annot = self.workdir + '/ensemble/' + self.sample + '_' + self.ref + '.SVs.ref.tsv'
+            self.df_calls = pd.read_csv(self.filename_variants, sep='\t', low_memory=False)
 
-        # Load data
-        self.df_calls = pd.read_csv(self.filename_variants, sep='\t', low_memory=False)
+        else:
+            
+            self.df_calls = df_calls
+            
         self.df_calls_annot = self.df_calls[['sample', 'id', 'type', 'chrom', 'chrom2', 'start', 'end']].copy()
+        
+        # Load reference data
         self.df_repeats = pd.read_csv('/'.join([self.ref_dir, self.filename_repeats]), index_col=0, sep='\t')
         self.df_vntrs = pd.read_csv('/'.join([self.ref_dir, self.filename_vntrs]), sep='\t', header=None, names=['chrom', 'start', 'stop', 'class'])
         self.df_strs = pd.read_csv('/'.join([self.ref_dir, self.filename_strs]), sep='\t', header=None, names=['chrom', 'start', 'stop', 'len_unit', 'seq_unit', 'unknown'])
@@ -318,7 +325,7 @@ class ReferenceAnnotator:
             self.df_calls_annot_bnd2['GC_content_right'] = self.df_calls_annot_bnd2.apply(lambda x: self.calculate_gc_content(x, 'end'), axis=1)
 
 
-    def to_csv(self):
+    def aggregate_results(self):
         """ Save the dataframe to a csv file. """
 
         if self.split_bnd:

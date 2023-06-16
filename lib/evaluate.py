@@ -13,6 +13,7 @@ from collections import defaultdict
 
 
 from lib.utils import replace_filename, parse_vcf
+from lib.collect_reference import ReferenceAnnotator
 
 CHROMS = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 
           'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 
@@ -22,15 +23,16 @@ class Eva:
     """ Class to evaluate dicast compared to other methods. """
 
 
-    def __init__(self, params):
+    def __init__(self, params, params_ref):
         self.sample = params['sample']
         self.ref = params['ref']
         self.fname_dicast = params['dicast']
+        self.fname_dicast_ref = params['dicast_ref_annot']
         self.fname_benchmark = params['benchmark']
         self.cur_root = params['curation_root']
         self.cur_date = params['curation_date']
         self.fnames_methods = params['vcf']
-        
+        self.params_ref = params_ref
         self.max_dist_overlap = 500
         self.min_size_overlap = 0.7
         self.svtypes = ['DEL']
@@ -118,19 +120,45 @@ class Eva:
         # Merge overlapping calls from benchmark
         self.variants_bench = bf.cluster(self.variants_bench).groupby('cluster').agg({'id' : 'first', 'chrom' : 'first', 'type' : 'first', 'confirmed' : 'first', 
                                                             'cluster_start' : 'first', 'cluster_end' : 'first'}).reset_index(drop=True).rename(columns={'cluster_start' : 'start', 'cluster_end' : 'end'})
+        
         self.variants_bench['size'] = self.variants_bench['end'] - self.variants_bench['start']
         self.variants_bench['id'] = self.variants_bench['chrom'] + '-' + self.variants_bench['type'] + '-' + self.variants_bench['start'].astype(str) + '-' + self.variants_bench['end'].astype(str) + '-' + self.variants_bench['size'].astype(int).astype(str)
 
         # Reorder columns
         self.variants_bench = self.variants_bench[['id', 'chrom', 'start', 'end', 'type', 'size', 'confirmed']].copy().reset_index(drop=True)
+        
+        # Add columns needed for ref annotation
+        self.variants_bench['chrom2'] = np.nan
+        self.variants_bench['sample'] = self.sample
 
 
-
-
+    def annotate_benchmark_variants(self):
+        """ Annotates benchmark variants with genomic context. """
+        
+        variants_bench = self.variants_bench.copy()
+        variants_bench['chrom2'] = np.nan
+        variants_bench['sample'] = self.sample
+        
+        RA = ReferenceAnnotator(self.sample, self.ref, '', self.params_ref, df_calls=variants_bench)
+        RA.annotate_repeats()
+        RA.annotate_vntrs()
+        RA.annotate_strs()
+        RA.annotate_cpg_islands()
+        RA.annotate_centromeres()
+        RA.annotate_asmb_gaps()
+        RA.annotate_alt_haps()
+        RA.annotate_gc_content()
+        RA.aggregate_results()
+        
+        self.variants_bench_ref = RA.df_calls_annot.copy()
+        
+        
     def read_dicast_variants(self):
         """ Reads dicast file and saves it in pandas dataframe. """
 
         self.variants_dicast = pd.read_csv(self.fname_dicast, sep='\t')
+        self.variants_dicast_ref = pd.read_csv(self.fname_dicast_ref, sep='\t', low_memory=False)
+        
         self.variants_dicast = self.variants_dicast[self.variants_dicast['type'].isin(self.svtypes)].copy().reset_index(drop=True)
         self.variants_dicast.rename(columns={'id': 'id_org'}, inplace=True)
 
@@ -294,7 +322,7 @@ class Eva:
                 pr_rc_dict['recall'].extend(recall[1:])
         
         self.precision_recall_df = pd.DataFrame(pr_rc_dict)
-
+        
 
     def create_manual_qc_tables(self, chunk_size=200):
         """ Create tables with SVs sent for manual QC. """
@@ -346,7 +374,7 @@ class Eva:
 
             df_multi.loc[df_multi.index.isin(df_method.index), methods[i]] = df_method['qual']
 
-        df_multi.reset_index(inplace=True)
+        df_multi.reset_index(inplace=True) 
 
         # Check which non confirmed variants are called by multiple methods
         overlap_dfs = []
@@ -364,7 +392,7 @@ class Eva:
 
         # Add non overlapping variants to df_multi
         for method in methods:
-            df_method = self.variants_filtered[methods[i]].copy()
+            df_method = self.variants_filtered[method].copy()
             df_method = df_method[(df_method['confirmed'] == 0) & (df_method['qual'] > 0) & (~df_method['id'].isin(overlap_ids[method]))].reset_index(drop=True)
             df_method[methods] = 0
             df_method[method] = df_method['qual']
@@ -450,7 +478,6 @@ class Eva:
 
             # Set confirmed variants which have < N callers to 0
             self.variants_filtered[method_name].loc[(self.variants_filtered[method_name]['confirmed'] == 1) & ((self.variants_filtered[method_name][methods] != 0).sum(axis=1) < i+1), 'qual'] = 0
-
 
 
 
