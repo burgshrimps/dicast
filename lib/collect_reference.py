@@ -349,4 +349,7 @@ class ReferenceAnnotator:
 
             self.df_calls_annot = pd.concat([self.df_calls_annot, df_calls_annot_bnd[self.df_calls_annot.columns]], ignore_index=True)
 
+    def to_csv(self):
+        """ Save the dataframe to a csv file. """
+        
         self.df_calls_annot.to_csv(self.filename_variants_ref_annot, index=False, na_rep='NA', sep='\t')
