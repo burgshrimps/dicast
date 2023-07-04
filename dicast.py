@@ -88,12 +88,14 @@ def save_manual_curation_set(df, params, chunk_size=200):
             df_sample_fp = df_sample[df_sample['err_type'] == 'FP'].copy().reset_index(drop=True)
             df_sample_fn = df_sample[df_sample['err_type'] == 'FN'].copy().reset_index(drop=True)
 
-            workdir_root_sample = replace_filename(params[cohort]['variant_curation'], sample, ref)
+            workdir_root_sample = replace_filename(params[cohort]['workdir'], sample, ref)
+            workdir_root_sample += '/' + datetime.today().strftime('%Y%m%d')
 
             # Save False Positives
             chunk_fp = 0
+            
             for i in range(0, len(df_sample_fp), chunk_size):
-                workdir_sample_fp_chunk = workdir_root_sample + '/FP/' + arguments.svtype + '/chunk' + str(chunk_fp)
+                workdir_sample_fp_chunk = workdir_root_sample + '/' + arguments.svtype + '/FP/chunk' + str(chunk_fp)
                 filename_sample_fp_chunk = '_'.join([datetime.today().strftime('%Y%m%d'), sample, 'FP', arguments.svtype, 'chunk' + str(chunk_fp)]) + '.tsv'
                 if not os.path.exists(workdir_sample_fp_chunk):
                     os.makedirs(workdir_sample_fp_chunk)
@@ -106,7 +108,7 @@ def save_manual_curation_set(df, params, chunk_size=200):
             # Save False Negatives
             chunk_fn = 0
             for i in range(0, len(df_sample_fn), chunk_size):
-                workdir_sample_fn_chunk = workdir_root_sample + '/FN/' + arguments.svtype + '/chunk' + str(chunk_fn)
+                workdir_sample_fn_chunk = workdir_root_sample + '/' + arguments.svtype + '/FN/chunk' + str(chunk_fn)
                 filename_sample_fn_chunk = '_'.join([datetime.today().strftime('%Y%m%d'), sample, 'FN', arguments.svtype, 'chunk' + str(chunk_fn)]) + '.tsv'
                 if not os.path.exists(workdir_sample_fn_chunk):
                     os.makedirs(workdir_sample_fn_chunk)

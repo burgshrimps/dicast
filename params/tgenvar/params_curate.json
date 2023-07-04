@@ -1,11 +1,11 @@
 {
     "tgenvar" :
     {
-        "samples" : ["17-08", "146-97", "176-98", "906-02", "18-5047"],
+        "samples" : ["17-08", "2048-07", "906-02", "18-5047"],
         "ref" : "hg38",
-        "workdir" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/curation",
+        "workdir" : "/confidential/tGenVar/scripts/tGenVar/dicast/training/curation/REF/SAMPLE",
         "variant_features" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/ensemble/SAMPLE_REF.SVs.annot.tsv",
-        "variant_labels" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/SAMPLE.decast_input.csv",
-        "variant_curation" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/curation/SAMPLE_REF.SVs.curated.tsv"
+        "variant_labels" : "/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/SAMPLE.all.decast_input.csv",
+        "variant_curation" : "/confidential/tGenVar/scripts/tGenVar/dicast/training/curation/REF/SAMPLE/SAMPLE_REF.SVs.curated.tsv"
     }
 }

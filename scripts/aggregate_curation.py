@@ -24,13 +24,13 @@ def aggregate_curation(sample, ref, date, directory, curators):
     param date: The date of the curation.
     param directory: The directory where the curation votes are stored.
     param curators: The list of curators. """
-
+    
     curation_dfs = []
     curator_cols = []
     for curator in curators:
         curator_col = 'Confirmed (' + curator + ')'
         try:
-            curation_df = pd.concat([pd.read_csv(fname, sep='\t') for fname in glob(directory + '/*/*/*/' + date + '*' + curator + '_curated.tsv')], ignore_index=True)
+            curation_df = pd.concat([pd.read_csv(fname, sep='\t') for fname in glob(directory + '/*/*/*/*/*' + curator + '_curated.tsv')], ignore_index=True)
             curation_df = curation_df[['sample', 'tech', 'method', 'id', 'type', 'chrom', 'chrom2', 'start', 'end', 'confirmed', 'pred_dicast', 'err_type', curator_col]].copy()
             curation_df[curator_col] = curation_df[curator_col].replace({True: 1, False: 0})
             curation_dfs.append(curation_df)
@@ -45,16 +45,16 @@ def aggregate_curation(sample, ref, date, directory, curators):
         curation_df['Confirmed (Consensus)'] = curation_df[curator_cols].apply(consensus_curate, axis=1)
     else:
         curation_df['Confirmed (Consensus)'] = curation_df[curator_cols[0]]
-    curation_df.to_csv(directory + '/' + sample + '_' + ref + '.SVs.curated_old_ids.tsv', sep='\t', index=False)
-    #curation_df.to_csv(directory + '/' + date + '_' + sample + '_' + ref + '.SVs.curated.tsv', sep='\t', index=False)
+        
+    curation_df.to_csv(directory + '/' + sample + '_' + ref + '.SVs.curated.tsv', sep='\t', index=False)
 
 
 date = sys.argv[1]
 ref = 'hg38'
-samples = ['17-08', '146-97', '176-98', '906-02', '18-5047']
-curators = ['Nico', 'Uira', 'Jakob', 'Hossein', 'Maryam']
-directory = '/confidential/FamilyR13/DATA/10x/sv_compare/results/SAMPLE_REF/curation'
+samples = ['17-08', '2048-07', '906-02', '18-5047']
+curators = ['Nico']
+directory = '/confidential/tGenVar/scripts/tGenVar/dicast/training/curation/' + ref
 
 for sample in samples:
-    aggregate_curation(sample, ref, date, directory.replace('SAMPLE', sample).replace('REF', ref), curators)
+    aggregate_curation(sample, ref, date, directory + '/' + sample, curators)
 

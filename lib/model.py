@@ -67,10 +67,10 @@ class Dicast:
         # Load variant labels
         if variant_labels != None:
             filename_labels = replace_filename(variant_labels, sample, ref)
-            df_labels = pd.read_csv(filename_labels, low_memory=False)
+            df_labels = pd.read_csv(filename_labels, low_memory=False, index_col=0)
 
             # Filter based on confirmation status
-            df_labels = df_labels[(df_labels['StatusSimple'] == 'Confirmed') | (df_labels['StatusSimple'] == 'ConfirmedPublic')].copy().reset_index(drop=True)
+            df_labels = df_labels[(df_labels['FinalStatus'] == 'Confirmed') | (df_labels['FinalStatus'] == 'ConfirmedPublic')].copy().reset_index(drop=True)
 
             # Extract IDs of confirmed variants
             confirmed_ids = defaultdict(list)
@@ -80,7 +80,7 @@ class Dicast:
                 for entry in sub_graph:
                     for method in methods:
                         if entry[1:-1].startswith(method):
-                            confirmed_ids[method].append(entry[1:-1].split('_')[-1])
+                            confirmed_ids[method].append(entry[1:-1])
 
             # Add confirmation status to feature dataframe
             df_features['confirmed'] = 0
@@ -115,6 +115,7 @@ class Dicast:
         param cohort: string, cohort name """
         
         samples = self.params[cohort]['samples']
+        
         ref = self.params[cohort]['ref']
         variant_features = self.params[cohort]['variant_features']
         sample_dfs = []
@@ -153,10 +154,10 @@ class Dicast:
         self.variants = pd.concat(cohort_dfs, ignore_index=True)
         
         #### QUICK FIX RM LATER
-        #self.variants['size'].fillna('', inplace=True)
-        #self.variants.loc[self.variants['size'].str.startswith('('), 'size'] = self.variants.loc[self.variants['size'].str.startswith('('), 'size'].str.extract('\(([^,]*),')
-        #self.variants['size'].replace('', np.nan, inplace=True)
-        #self.variants['size'] = self.variants['size'].astype(float)
+        self.variants['size'].fillna('', inplace=True)
+        self.variants.loc[self.variants['size'].str.startswith('('), 'size'] = self.variants.loc[self.variants['size'].str.startswith('('), 'size'].str.extract('\(([^,]*),')
+        self.variants['size'].replace('', np.nan, inplace=True)
+        self.variants['size'] = self.variants['size'].astype(float)
         ############
 
         # Filter based on SV type
@@ -395,8 +396,8 @@ class Dicast:
                                            'pred_dicast'] + qual_cols].copy().reset_index(drop=True)
 
         # Determine which variants are sent for curation
-        variants_curation_fp = variants_curation[(variants_curation['confirmed'] == 0) & (variants_curation['qual_dicast'] > 0.5)].copy().reset_index(drop=True)
-        variants_curation_fn = variants_curation[(variants_curation['confirmed'] == 1) & (variants_curation['qual_dicast'] < 0.5)].copy().reset_index(drop=True)
+        variants_curation_fp = variants_curation[(variants_curation['confirmed'] == 0) & (variants_curation['qual_dicast'] > 0.4)].copy().reset_index(drop=True)
+        variants_curation_fn = variants_curation[(variants_curation['confirmed'] == 1) & (variants_curation['qual_dicast'] < 0.4)].copy().reset_index(drop=True)
         variants_curation_fp['err_type'] = 'FP'
         variants_curation_fn['err_type'] = 'FN'
         variants_curation = pd.concat([variants_curation_fp, variants_curation_fn], ignore_index=True)
@@ -429,6 +430,8 @@ class Dicast:
 
     def save_model(self):
         """ Save model. """
+        
+        print(self.pkl)
 
         # Create model directory if it does not exist
         model_dir = '/'.join(self.pkl.split('/')[:-1])
