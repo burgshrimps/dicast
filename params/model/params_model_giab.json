@@ -39,7 +39,7 @@
     {
         "classifier" : "XGBoostClassifier",
         "directory" : "/project/Variation/detection/dicast/models/XGB_100",
-        "features" : ["variant", "reference", "alignment"],
+        "features" : ["reference", "alignment"],
         "parameters" : 
         {
             "n_estimators" : 100,

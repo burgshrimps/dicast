@@ -55,6 +55,7 @@
         "balance": false,
         "chr_excl": [],
         "features": [
+            "variant",
             "reference",
             "alignment"
         ],
