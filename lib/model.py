@@ -285,6 +285,8 @@ class Dicast:
 
             self.num_svs_rm_na = 0
 
+        features = [feature for feature in features if feature.endswith('_I') or feature.endswith('_II')]
+        
         X = variants[features]
         if labels:
             y = variants['confirmed']
