@@ -270,6 +270,8 @@ class Dicast:
         if 'reference' in self.clfparams['features']:
             features += [f for f in columns if f.startswith('rep')] + ['cpg_islands', 'centromeres', 'asmb_gaps', 'alt_haps', 'GC_content_left', 'GC_content_right']
         
+        features = [feature for feature in features if feature.endswith('_I') or feature.endswith('_II')]
+        
         return features
 
 
@@ -284,8 +286,6 @@ class Dicast:
         elif self.clfparams['classifier'] == 'XGBoostClassifier':
 
             self.num_svs_rm_na = 0
-
-        features = [feature for feature in features if feature.endswith('_I') or feature.endswith('_II')]
         
         X = variants[features]
         if labels:
