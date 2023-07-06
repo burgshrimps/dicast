@@ -1,0 +1,33 @@
+{
+    "INS": {
+        "samples": [
+            "17-08",
+            "906-02",
+            "2048-07",
+            "18-5047"
+        ],
+        "techs": [
+            "ill"
+        ],
+        "methods": [
+            "delly",
+            "gridss",
+            "manta"
+        ],
+        "num_svs": 121953,
+        "num_nas": 121953,
+        "num_pos": 13239,
+        "num_neg": 108714,
+        "curation": true,
+        "balance": false,
+        "chr_excl": [],
+        "features": [
+            "alignment"
+        ],
+        "params": {
+            "n_estimators": 100,
+            "random_state": 0,
+            "n_jobs": 20
+        }
+    }
+}
