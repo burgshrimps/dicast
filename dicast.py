@@ -10,163 +10,77 @@ import re
 from datetime import datetime
 from pysam import VariantFile
 
-from lib.parsing import parse_arguments
-from lib.utils import read_parameters, replace_filename
-from lib.prepare import VariantPrep
-from lib.collect_reference import ReferenceAnnotator
-from lib.collect_illumina import AlignmentAnnotatorIllumina
-from lib.model import Dicast
+from dicast_lib.parsing import parse_arguments
+from dicast_lib.utils import read_parameters, replace_filename
+from dicast_lib.prepare import VariantPrep
+from dicast_lib.collect_reference import ReferenceAnnotator
+from dicast_lib.collect_illumina import AlignmentAnnotatorIllumina
+from dicast_lib.model import Dicast
 
 
 # List of chromosomes to process
-CHROMS = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 
-          'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 
-          'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
+chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 
+        'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 
+        'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
+
+# List of SV types currently supported by dicast
+sv_types = ['DEL']
 
 
-def collect_aln_features(chrom):
+def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot_filename: str, chrom: str, sv_type: str):
     """ Collects alignment features for a given chromosome. 
     
     param chrom: Chromosome name """
 
-    AAI = AlignmentAnnotatorIllumina(arguments.sample, arguments.ref, arguments.workdir, params, chrom=chrom)
+    AAI = AlignmentAnnotatorIllumina(bam_filename, chrom, sv_type)
+    AAI.load_from_csv(variant_filename)
     AAI.calculate_coverage_baseline()
     AAI.calculate_insertsize_baseline()
     AAI.calculate_mapping_quality_baseline()
     AAI.annotate_coverage()
     AAI.annotate_read_based_features()
-    AAI.to_csv()
+    AAI.to_csv(variant_annot_filename)
 
 
-def combine_feature_files(sample, ref, workdir):
-    """ Combines variant, reference and alignment features into one file.
+def combine_feature_files(sample: str, ref: str, workdir: str):
+
+    df_raw = pd.read_csv(f'{workdir}/{sample}_{ref}.SVs.raw.tsv', sep='\t', low_memory=False)
+    df_ref = pd.read_csv(f'{workdir}/{sample}_{ref}.SVs.ref.tsv', sep='\t', low_memory=False)
     
-    param sample: Sample name
-    param ref: Reference name
-    param workdir: Working directory 
-    
-    return: pandas dataframe with combined features """
-
-    df_raw = pd.read_csv(f'{workdir}/ensemble/{sample}_{ref}.SVs.raw.tsv', sep='\t', low_memory=False)
-    df_ref = pd.read_csv(f'{workdir}/ensemble/{sample}_{ref}.SVs.ref.tsv', sep='\t', low_memory=False)
-    filenames_aln_ill = glob(f'{workdir}/ensemble//{sample}_{ref}.SVs.aln.ill.*.tsv')
+    filenames_aln_ill = glob(f'{workdir}/{sample}_{ref}.SVs.aln.ill.*.*.tsv')
     df_aln_ill = pd.concat([pd.read_csv(f, sep='\t') for f in filenames_aln_ill], ignore_index=True)
-    df = df_raw.merge(df_ref.drop(['sample', 'type', 'chrom', 'chrom2', 'start', 'end'], axis=1), on='id', how='inner')
-    df = df.merge(df_aln_ill.drop(['sample', 'type', 'chrom', 'chrom2', 'start', 'end'], axis=1), on='id', how='inner')
+    
+    df = df_raw.merge(df_ref.drop(['sample', 'sv_type', 'chrom', 'chrom_2', 'start', 'end'], axis=1), on='id', how='inner')
+    df = df.merge(df_aln_ill.drop(['sample', 'sv_type', 'chrom', 'chrom_2', 'start', 'end'], axis=1), on='id', how='inner')
 
     return df
 
 
-def create_manual_curation_set(chrom):
-    """ Create a set of SVs for manual curation. Train on all chromosomes except the current one and then test on the current one.
+def add_info_tag_to_vcf(vcfs, dicast_df):
     
-    param chrom: Chromosome name 
-    return curation set: pandas dataframe with SVs for manual curation """
-
-    dicast = Dicast('curate', arguments.svtype, params, clf=arguments.clfname, clfparams=clfparams, chr_excl=[chrom], chr_incl=[chrom])
-    dicast.load_data()
-    dicast.impute() 
-    dicast.train()
-    dicast.predict()
-    dicast.compute_qual()
-    print('Finished chromosome {0}'.format(chrom))
-    return dicast.get_curation_set()
-
-
-def save_manual_curation_set(df, params, chunk_size=200):
-    """ Splits manual curation dataframe into chunks and saves them to disk.
-
-    param df: Manual curation dataframe
-    param params: Parameters
-    param chunk_size: Number of SVs per chunk """
-
-    for cohort in params:
-        ref = params[cohort]['ref']
-
-        for sample in params[cohort]['samples']:
-            df_sample = df.loc[(df['sample'] == sample)].copy().reset_index(drop=True)
-            df_sample_fp = df_sample[df_sample['err_type'] == 'FP'].copy().reset_index(drop=True)
-            df_sample_fn = df_sample[df_sample['err_type'] == 'FN'].copy().reset_index(drop=True)
-
-            workdir_root_sample = replace_filename(params[cohort]['workdir'], sample, ref)
-            workdir_root_sample += '/' + datetime.today().strftime('%Y%m%d')
-
-            # Save False Positives
-            chunk_fp = 0
+    for caller, vcf_filename in vcfs:
+        
+        vcf_in = VariantFile(vcf_filename, 'r')
+        vcf_in.header.info.add("DQ", number="1", type="String", description="Dicast Quality Score")
+        
+        vcf_filename_out = vcf_filename.replace('.vcf', '.dicast.vcf').replace('.gz', '')
+        vcf_out = VariantFile(vcf_filename_out, 'w', header=vcf_in.header)
+        
+        dicast_df_caller = dicast_df[dicast_df['caller'] == caller].copy().reset_index(drop=True)
+        dicast_df_caller = dicast_df_caller[['id', 'dicast_qual']].set_index('id').T.to_dict('list')
+        
+        for rec in vcf_in.fetch():
+            if rec.id in dicast_df_caller.keys():
+                qual_dicast = dicast_df_caller[rec.id][0]
+            else:
+                qual_dicast = -1
+                
+            rec.info['DQ'] = str(qual_dicast)
+            vcf_out.write(rec)
             
-            for i in range(0, len(df_sample_fp), chunk_size):
-                workdir_sample_fp_chunk = workdir_root_sample + '/' + arguments.svtype + '/FP/chunk' + str(chunk_fp)
-                filename_sample_fp_chunk = '_'.join([datetime.today().strftime('%Y%m%d'), sample, 'FP', arguments.svtype, 'chunk' + str(chunk_fp)]) + '.tsv'
-                if not os.path.exists(workdir_sample_fp_chunk):
-                    os.makedirs(workdir_sample_fp_chunk)
-
-                df_sample_fp_chunk = df_sample_fp.iloc[i:i+chunk_size].copy().reset_index(drop=True)
-                df_sample_fp_chunk.to_csv('/'.join([workdir_sample_fp_chunk, filename_sample_fp_chunk]), sep='\t', index=False, na_rep='NA')
-
-                chunk_fp += 1
-
-            # Save False Negatives
-            chunk_fn = 0
-            for i in range(0, len(df_sample_fn), chunk_size):
-                workdir_sample_fn_chunk = workdir_root_sample + '/' + arguments.svtype + '/FN/chunk' + str(chunk_fn)
-                filename_sample_fn_chunk = '_'.join([datetime.today().strftime('%Y%m%d'), sample, 'FN', arguments.svtype, 'chunk' + str(chunk_fn)]) + '.tsv'
-                if not os.path.exists(workdir_sample_fn_chunk):
-                    os.makedirs(workdir_sample_fn_chunk)
-
-                df_sample_fn_chunk = df_sample_fn.iloc[i:i+chunk_size].copy().reset_index(drop=True)
-                df_sample_fn_chunk.to_csv('/'.join([workdir_sample_fn_chunk, filename_sample_fn_chunk]), sep='\t', index=False, na_rep='NA')
-
-                chunk_fn += 1
-
-
-def save_predictions(workdir, pred):
-    """ Splits dicast prediction dataframe by sample and saves it in workdir. 
-    
-    param workdir: Output directory
-    param pred: Dicast prediction dataframe """
-
-    for sample in pred['sample'].unique():
-        pred_sample = pred.loc[(pred['sample'] == sample)].copy().reset_index(drop=True)
-        pred_sample = pred_sample[['id', 'sample', 'tech', 'method', 'type', 'chrom', 'chrom2', 'start', 'end', 'size', 
-                                   'filter', 'qual', 'pred_dicast', 'qual_dicast']]
-        pred_sample.to_csv('/'.join([workdir, sample + '.dicast.tsv']), sep='\t', index=False, na_rep='NA')
-
-
-def add_predictions_vcf(params, predictions, workdir):
-    """ Adds Dicast predictions as a new INFO field to the VCF file 
-    
-    param params: dictionary, Prediction parameter file
-    param predictions: pandas dataframe, dicast predictions
-    param workdir: Output directory """
-
-    for cohort in params:
-        for sample in params[cohort]['samples']:
-            for tech in params[cohort]['vcf']:
-                for method in params[cohort]['vcf'][tech]:
-
-                    fname_vcf_in = replace_filename(params[cohort]['vcf'][tech][method], sample, params[cohort]['ref'])
-                    if not os.path.exists(fname_vcf_in):
-                        fname_vcf_in = fname_vcf_in.replace(sample, sample.replace('-', '_'))
-                    vcf_in = VariantFile(fname_vcf_in, 'r')
-                    vcf_in.header.info.add("DQ", number="1", type="String", description="Dicast Quality Score")
-
-                    fname_vcf_out = fname_vcf_in.replace('.vcf', '.dicast.vcf').replace('.gz', '')
-                    vcf_out = VariantFile(fname_vcf_out, 'w', header=vcf_in.header)
-                    
-                    variants_subset = predictions.loc[(predictions['sample'] == sample) & (predictions['tech'] == tech) & (predictions['method'] == method)].copy().reset_index(drop=True)
-                    variants_subset = variants_subset[['id', 'qual_dicast']].set_index('id').T.to_dict('list')
-                    for rec in vcf_in.fetch():
-                        if rec.id in variants_subset.keys():
-                            qual_dicast = variants_subset[rec.id][0]
-                        else:
-                            qual_dicast = -1
-
-                        rec.info['DQ'] = str(qual_dicast)
-                        vcf_out.write(rec)
-                    vcf_out.close()
-                    vcf_in.close()
-                    logging.info(f'Added DQ tag to {method} VCF file for sample {sample}')
-
+        vcf_out.close()
+        vcf_in.close()
+        logging.info(f'Added DQ tag to {caller} VCF file')
 
 
 if __name__ == '__main__':
@@ -186,28 +100,59 @@ if __name__ == '__main__':
     print('')
     logging.info('############### Start DICAST ###############\n')
     logging.info('CMD: python3 {0}'.format(' '.join(sys.argv)))
+    print('')
 
-    if arguments.command == 'prepare':
+    if arguments.command == 'call':
 
-        logging.info('MODE: prepare')
+        logging.info('MODE: call')
+        logging.info(f'COHORT: {arguments.cohort}')
         logging.info(f'SAMPLE: {arguments.sample}')
         logging.info(f'REF: {arguments.ref}')
-        logging.info(f'PARAMS: {arguments.params}')
+        logging.info(f'TECH: {arguments.technology}')
         logging.info(f'WORKDIR: {arguments.workdir}')
+        logging.info(f'FAI: {arguments.fai}')
+        logging.info(f'REPEATS: {arguments.repeats}')
+        logging.info(f'CGIS: {arguments.cgis}')
+        logging.info(f'CENTROMERES: {arguments.centromeres}')
+        logging.info(f'GAPS: {arguments.gaps}')
+        logging.info(f'ALTHAPS: {arguments.althaps}')
+        logging.info(f'VNTRS: {arguments.vntrs}')
+        logging.info(f'STRS: {arguments.strs}')
+        logging.info(f'GC: {arguments.gc}')
+        logging.info(f'BAM: {arguments.bam}')
+        logging.info(f'THREADS: {arguments.threads}')
+        logging.info(f'MODELS: {arguments.models}')
+        logging.info(f'SV CALLERS: {", ".join([caller for caller, vcf in arguments.vcfs])}')
+        logging.info(f'VCFs: {", ".join([vcf for caller, vcf in arguments.vcfs])}')
         print('')
         
-        params = read_parameters(arguments.params)
-        
-        VP = VariantPrep(arguments.sample, arguments.ref, params, arguments.workdir, CHROMS)
+        """
+        logging.info('# Create Variant DataFrame')
+        VP = VariantPrep(arguments.cohort, arguments.sample, arguments.ref, arguments.workdir, 
+                         arguments.technology, arguments.vcfs, chroms, arguments.fai, sv_types)
         logging.info('# Read Variants')
         VP.read_variants() 
         logging.info('# Filter Variants')
         VP.filter_variants()
         logging.info('# Save Variants')
         VP.save_variants()
-
+        
+        # Create dictionary with reference annotaiton filenames
+        reference_filenames = {
+            'repeats_filename' : arguments.repeats,
+            'vntrs_filename' : arguments.vntrs,
+            'strs_filename' : arguments.strs,
+            'cpgislands_filename' : arguments.cgis,
+            'centromeres_filename' : arguments.centromeres,
+            'asmb_gaps_filename' : arguments.gaps,
+            'alt_haps_filename' : arguments.althaps,
+            'gc_filename' : arguments.gc
+        }
+        
         logging.info('# Collect Reference Features')
-        RA = ReferenceAnnotator(arguments.sample, arguments.ref, arguments.workdir, params)
+        RA = ReferenceAnnotator(reference_filenames)
+        RA.load_from_csv('/'.join([arguments.workdir, arguments.sample + '_' + arguments.ref + '.SVs.raw.tsv']))
+        RA.split_bnd()
         logging.info('# Annotation Repeats')
         RA.annotate_repeats()
         logging.info('# Annotation VNTRs')
@@ -227,115 +172,48 @@ if __name__ == '__main__':
         logging.info('# Aggregate Results')
         RA.aggregate_results()
         logging.info('# Save Reference Features')
-        RA.to_csv()
-
-        logging.info('# Collect Illumina Alignment Features')
-        Parallel(n_jobs=len(CHROMS))(delayed(collect_aln_features)(chrom) for chrom in CHROMS)
+        RA.to_csv('/'.join([arguments.workdir, arguments.sample + '_' + arguments.ref + '.SVs.ref.tsv']))
+        
+        if arguments.technology == 'ill':
+            logging.info('# Collect Illumina Alignment Features')
+            
+            parallel_input = []
+            for sv_type in sv_types:
+                for chrom in chroms:
+                    
+                    variant_filename = '/'.join([arguments.workdir, arguments.sample + '_' + arguments.ref + '.SVs.raw.tsv'])
+                    variant_annot_filename = '/'.join([arguments.workdir, arguments.sample + '_' + arguments.ref + '.SVs.aln.ill.' + chrom + '.' + sv_type + '.tsv'])
+                    parallel_input.append((arguments.bam, variant_filename, variant_annot_filename, chrom, sv_type))
+            
+            Parallel(n_jobs=arguments.threads)(delayed(collect_aln_features)(*args) for args in parallel_input)
         
         logging.info('# Combination Output Files')
         df = combine_feature_files(arguments.sample, arguments.ref, arguments.workdir)
-        df.to_csv(f'{arguments.workdir}/ensemble/{arguments.sample}_{arguments.ref}.SVs.annot.tsv', sep='\t', index=False, na_rep='NA')
-
-    elif arguments.command == 'train':
-
-        logging.info('MODE: train')
-        logging.info(f'TYPE: {arguments.svtype}')
-        logging.info(f'CLASSIFIER: {arguments.clfname}')
-        logging.info(f'CLASSIFIER PARAMS: {arguments.clfparams}')
-        logging.info(f'PARAMS: {arguments.params}')
-        logging.info(f'EXCLUDED CHROMS: {arguments.chr_excl}')
-        logging.info(f'CURATION: {arguments.cur}')
-        print('')
-
-        params = read_parameters(arguments.params)
-        clfparams = read_parameters(arguments.clfparams)
-        model_out = clfparams[arguments.clfname]['directory'] + '/' + arguments.clfname + '_' + arguments.svtype.upper() + '.pkl'
-
-        dicast = Dicast('train', arguments.svtype, params, pkl=model_out, clf=arguments.clfname, clfparams=clfparams, 
-                        chr_excl=arguments.chr_excl, incl_cur=arguments.cur, balance=arguments.bal)
-        logging.info('# Load Training Data')
-        dicast.load_data()
-        logging.info('# Inpute Missing Values')
-        dicast.impute()
-        logging.info('# Train Model')
-        dicast.train()
-        logging.info('# Save Model')
-        dicast.save_model()
-
-    elif arguments.command == 'test':
-
-        logging.info('MODE: test')
-        logging.info(f'TYPE: {arguments.svtype}')
-        logging.info(f'PARAMS: {arguments.params}')
-        logging.info(f'INCLUDED CHROMS: {arguments.chr_incl}')
-        logging.info(f'CURATION: {arguments.cur}')
-        print('')
-
-        params = read_parameters(arguments.params)
-        clfparams = read_parameters(arguments.clfparams)
-        model_in = clfparams[arguments.clfname]['directory'] + '/' + arguments.clfname + '_' + arguments.svtype.upper() + '.pkl'
-
-        dicast = Dicast('test', arguments.svtype, params, pkl=model_in, clf=arguments.clfname, clfparams=clfparams, chr_incl=arguments.chr_incl, 
-                        incl_cur=arguments.cur)
-        logging.info('# Load Test Data')
-        dicast.load_data()
-        logging.info('# Load Model')
-        dicast.load_model()
-        logging.info('# Inpute Missing Values')
-        dicast.impute()
-        logging.info('# Predict')
-        dicast.predict()
-        logging.info('# Compute Quality Scores')
-        dicast.compute_qual()
-        logging.info('# Save Test Results')
-        dicast.save_test()
-
-
-    elif arguments.command == 'predict':
-
-        logging.info('MODE: test')
-        logging.info(f'PARAMS: {arguments.params}')
-        print('')
-
-        params = read_parameters(arguments.params)
-        clfparams = read_parameters(arguments.clfparams)
-        model_dir = clfparams[arguments.clfname]['directory']
-
-        predictions = []
-        for file in glob(model_dir + '/*.pkl'):
-            svtype = file.split('_')[-1].split('.')[0]
-            logging.info(f'Predicting: {svtype}')
-            dicast = Dicast('predict', svtype, params, pkl=file, clf=arguments.clfname, clfparams=clfparams)
-            dicast.load_data()
-            dicast.impute()
-            dicast.load_model()
+        df.to_csv(f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.annot.tsv', sep='\t', index=False, na_rep='NA')
+        """
+        logging.info('# Variant Prediction')
+        dicast_dfs = []
+        for sv_type in sv_types:
+            
+            variant_features_filename = f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.annot.tsv'
+            model_filename = f'{arguments.models}/dicast_{sv_type}.pkl'
+            
+            dicast = Dicast(sv_type)
+            dicast.load_from_csv(variant_features_filename)
+            dicast.impute_missing_values()
+            dicast.load_model(model_filename)
             dicast.predict()
-            predictions.append(dicast.variants)
-        logging.info('# Save Predictions')
-        save_predictions(arguments.workdir, pd.concat(predictions, ignore_index=True))
-
-        if arguments.vcf:
-            add_predictions_vcf(params, pd.concat(predictions, ignore_index=True), arguments.workdir)
-
-    elif arguments.command == 'curate':
-        logging.info('MODE: curate')
-        logging.info(f'TYPE: {arguments.svtype}')
-        logging.info(f'CLASSIFIER: {arguments.clfname}')
-        logging.info(f'CLASSIFIER PARAMS: {arguments.clfparams}')
-        logging.info(f'PARAMS: {arguments.params}')
-        print('')
-
-        params = read_parameters(arguments.params)
-        clfparams = read_parameters(arguments.clfparams)
-
-        curation_set = Parallel(n_jobs=len(CHROMS))(delayed(create_manual_curation_set)(chrom) for chrom in CHROMS)
-        curation_set = pd.concat(curation_set, ignore_index=True)
-        save_manual_curation_set(curation_set, params)
-    else:
-        raise ValueError('Invalid command')
+            dicast_dfs.append(dicast.to_df())
+            
+        dicast_df = pd.concat(dicast_dfs, ignore_index=True)
+        dicast_df.to_csv(f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.dicast.tsv', sep='\t', index=False, na_rep='NA')
+        
+        logging.info('# Add Info Tag to VCF')
+        add_info_tag_to_vcf(arguments.vcfs, dicast_df)
 
     print('')
     logging.info('############### Finished DICAST ###############\n')
+    
 
 
     
