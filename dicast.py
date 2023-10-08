@@ -126,7 +126,6 @@ if __name__ == '__main__':
         logging.info(f'VCFs: {", ".join([vcf for caller, vcf in arguments.vcfs])}')
         print('')
         
-        """
         logging.info('# Create Variant DataFrame')
         VP = VariantPrep(arguments.cohort, arguments.sample, arguments.ref, arguments.workdir, 
                          arguments.technology, arguments.vcfs, chroms, arguments.fai, sv_types)
@@ -190,7 +189,7 @@ if __name__ == '__main__':
         logging.info('# Combination Output Files')
         df = combine_feature_files(arguments.sample, arguments.ref, arguments.workdir)
         df.to_csv(f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.annot.tsv', sep='\t', index=False, na_rep='NA')
-        """
+        
         logging.info('# Variant Prediction')
         dicast_dfs = []
         for sv_type in sv_types:
