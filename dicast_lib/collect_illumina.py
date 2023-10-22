@@ -9,7 +9,7 @@ from dicast_lib.utils import mad
 class AlignmentAnnotatorIllumina:
     """ Class for annotating SVs with features derived from the alignment of short reads. """    
 
-    def __init__(self, bam_filename: str, chrom: str, sv_type: str):
+    def __init__(self, bam_filename: str, chrom: str, sv_type: str, sample: str):
         """ Initializes the class.
 
         Args:
@@ -19,17 +19,54 @@ class AlignmentAnnotatorIllumina:
         """        
 
         # Meta data
+        self.sample = sample
         self.chrom = chrom
         self.sv_type = sv_type
         self.features_breakpoints = ['ill_cov_mean_', 'ill_cov_std_', 'ill_isize_mean_', 'ill_isize_std_', 'ill_mapq_mean_', 'ill_mapq_std_', 
                          'ill_clipreads_', 'ill_splitreads_', 'ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_']
         self.features_body = ['ill_cov_mean_', 'ill_cov_std_']
         self.features_connection = ['ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_splitreads']
-        self.cov_thr = 6 # Threshold for log2 change in coverage to be considered for feature extraction, otherwise jump
+        self.cov_thr = 5 # Threshold for log2 change in coverage to be considered for feature extraction, otherwise jump
         
         # Alignment file
         self.alignment_file = bam_filename
         self.bam = pysam.AlignmentFile(self.alignment_file, 'rb')
+        
+        # Log message for tqdm
+        self.log_message = ' '.join([self.sample, self.chrom, self.sv_type])
+        
+        # Define bins around SV to calculate features for
+        # Values are: [chrom, pos_col_left, pos_col_right, offset_left, offset_right, check_len]
+        if self.sv_type == 'DEL' or self.sv_type == 'DUP' or self.sv_type == 'INV':
+            # Bins around the breakpoints
+            self.bin_dict_bps = {'I' : ['chrom', 'start', 'start', -50, 0],
+                                 'II' : ['chrom', 'start', 'start', 0, 50],
+                                 'III' : ['chrom', 'end', 'end', -50, 0],
+                                 'IV' : ['chrom', 'end', 'end', 0, 50]}
+            
+            # Bins inside the SV body
+            self.bin_dict_body = {'IIa' : ['chrom', 'start', 'body_I', 50, 0],
+                                  'IIb' : ['chrom', 'body_I', 'body_II', 0, 0],
+                                  'IIIb' : ['chrom', 'body_II', 'body_III', 0, 0],
+                                  'IIIa' : ['chrom', 'body_III', 'end', 0, -50]}
+            
+        elif self.sv_type == 'INS':
+            # Bins around the breakpoints
+            self.bin_dict_bps = {'I' : ['chrom', 'start', 'start', -50, 0],
+                                 'II' : ['chrom', 'start', 'start', 0, 50]}
+            
+        elif self.sv_type == 'BND':
+            # Bins around the breakpoints
+            self.bin_dict_bps = {'I' : ['chrom', 'start', 'start', -50, 0],
+                                'II' : ['chrom', 'start', 'start', 0, 50],
+                                'III' : ['chrom_2', 'end', 'end', -50, 0],
+                                'IV' : ['chrom_2', 'end', 'end', 0, 50]}
+        
+        # Define connections between bins    
+        self.bin_connections = {'I' : ['II', 'III', 'IV'],
+                                'II' : ['III', 'IV'],
+                                'III' : ['IV'],
+                                'IV' : []}
         
         
     def prepare_dataframe(self):
@@ -170,6 +207,33 @@ class AlignmentAnnotatorIllumina:
         self.baseline_mapq_std = np.std(mapqs)
         
         
+    def jump_to_next_variant_for_coverage_calculation(self, df: pd.DataFrame, i: int, pos_col_left: str, pos_col_right: str, offset_left: int, offset_right: int, suffix: str) -> pd.DataFrame:
+        """ Checks if the mean coverage in a region exceeds the threshold. If yes, all variants overlapping that bin are excluded from further analysis.
+
+        Args:
+            df (pd.DataFrame): DataFrame containing the SVs
+            i (int): Index of current SV
+            pos_col_left (str): Column name for the left position
+            pos_col_right (str): Column name for the right position
+            offset_left (int):  Position +- Offset Left = Start position of the bin
+            offset_right (int): Position +- Offset Right = End position of the bin
+            suffix (str):  Suffix for column names
+
+        Returns:
+            pd.DataFrame: _description_
+        """        
+        
+        if df.loc[i, 'ill_cov_mean_' + suffix] > self.cov_thr:
+            mask_left = (df[(df[pos_col_left] + offset_left >= df.loc[i, pos_col_left] + offset_left) & (df[pos_col_left] + offset_left <= df.loc[i, pos_col_right] + offset_right)])
+            mask_right = (df[(df[pos_col_right] + offset_right >= df.loc[i, pos_col_left] + offset_left) & (df[pos_col_right] + offset_right <= df.loc[i, pos_col_right] + offset_right)])
+            exclude_idx = list(set(mask_left.index) | set(mask_right.index))
+            
+            return len(exclude_idx), list(exclude_idx)
+        
+        else:
+            return 1, []         
+        
+        
     def calculate_coverage_region(self, chrom: str, start: int, stop: int, suffix: str) -> pd.Series:
         """ Calculates mean and std coverage in a region.
 
@@ -216,31 +280,41 @@ class AlignmentAnnotatorIllumina:
         df = df.copy()
         i = 0
         all_exclude_idx = []
+        pbar = tqdm(total=len(df), desc=' '.join(['Annotation Coverage:', self.log_message, suffix]), position=0, leave=True)
         
         while i < len(df):
             
             if check_len:
                 sv_len = df.loc[i, 'sv_len']
                 
-                if sv_len < 150 or sv_len > 10000000:
+                if sv_len < 150:
                     breakpoint_suffix = suffix[:-1]
                     df.loc[i, ['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix]] = df.loc[i, ['ill_cov_mean_' + breakpoint_suffix, 'ill_cov_std_' + breakpoint_suffix]]
                     i += 1
+                    pbar.update(1)
                     continue
+                     
+                elif sv_len < 5000:
+                    left_border = df.loc[i, pos_col_left] + offset_left
+                    right_border = df.loc[i, pos_col_right] + offset_right
+                
+                else:
+                    left_border = df.loc[i, pos_col_left] + offset_left
+                    right_border = left_border + 50
                     
-            df.loc[i, ['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix]] = self.calculate_coverage_region(df.loc[i, chrom_col], df.loc[i, pos_col_left] + offset_left, df.loc[i, pos_col_right] + offset_right, suffix)
-            i += 1
-            
-            """
-            # Mechanism to jump regions with extremly high coverage
-            if df.loc[i, 'ill_cov_mean_' + suffix] > self.cov_thr:
-                exclude_idx = df[(df[pos_col_left] >= df.loc[i, pos_col_left] + offset_left) & (df[pos_col_right] <= df.loc[i, pos_col_right] + offset_right)].index
-                i += len(exclude_idx)
-                all_exclude_idx += list(exclude_idx)
-            
-            else:
+                df.loc[i, ['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix]] = self.calculate_coverage_region(df.loc[i, chrom_col], left_border, right_border, suffix)
                 i += 1
-            """
+                pbar.update(1)
+                
+            else:       
+                left_border = df.loc[i, pos_col_left] + offset_left
+                right_border = df.loc[i, pos_col_right] + offset_right
+               
+                df.loc[i, ['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix]] = self.calculate_coverage_region(df.loc[i, chrom_col], left_border, right_border, suffix)
+                step_size, exclude_idx = self.jump_to_next_variant_for_coverage_calculation(df, i, pos_col_left, pos_col_right, offset_left, offset_right, suffix)
+                i += step_size
+                all_exclude_idx += exclude_idx
+                pbar.update(step_size)
 
         df.drop(all_exclude_idx, inplace=True)
         df.reset_index(drop=True, inplace=True)
@@ -258,30 +332,17 @@ class AlignmentAnnotatorIllumina:
     def annotate_coverage(self):
         """ Annotates SVs with mean and std coverage for all bins around the SV breakpoints. """        
 
-        if self.sv_type == 'DEL' or self.sv_type == 'DUP' or self.sv_type == 'INV':
+        # Calculate coverage around breakpoints
+        for suffix, values in self.bin_dict_bps.items():
+            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, values[0], values[1], values[2], values[3], values[4], suffix)
             
-            # Calculate coverage around the breakpoints
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'start', 'start', -50, 0, 'I')
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'start', 'start', 0, 50, 'II')
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'end', 'end', -50, 0, 'III')
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'end', 'end', 0, 50, 'IV')
-            
-            # Calculate coverage in the body of the SV
+        if self.sv_type == 'DEL' or self.sv_type == 'DUP' or self.sv_type == 'INV':    
+            # Generate borders for bins inside the SV body
             self.df_calls_annot.loc[:, ['body_I', 'body_II', 'body_III']] = self.df_calls_annot.apply(lambda x: self.divide_sv_body(x['start'] + 50, x['end'] - 50), axis=1, result_type ='expand')
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'start', 'body_I', 50, 0, 'IIa', check_len=True)
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'body_I', 'body_II', 0, 0, 'IIb', check_len=True)
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'body_II', 'body_III', 0, 0, 'IIIb', check_len=True)
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'body_III', 'end', 0, -50, 'IIIa', check_len=True)
             
-        elif self.sv_type == 'INS':
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'start', 'start', -50, 0, 'I')
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'start', 'start', 0, 50, 'II')
-            
-        elif self.sv_type == 'BND':
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'start', 'start', -50, 0, 'I')
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom', 'start', 'start', 0, 50, 'II')
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom_2', 'end', 'end', -50, 0, 'III')
-            self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, 'chrom_2', 'end', 'end', 0, 50, 'IV')
+            # Calculate coverage inside the SV body
+            for suffix, values in self.bin_dict_body.items():
+                self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, values[0], values[1], values[2], values[3], values[4], suffix, check_len=True)
             
             
     def get_overlap(self, a: tuple, b: tuple) -> int:
@@ -369,10 +430,6 @@ class AlignmentAnnotatorIllumina:
                         disco_rf_reads += 1
                     elif read.is_read2 and not read.is_reverse and read.mate_is_reverse:
                         disco_rf_reads += 1
-                    elif read.is_read2 and read.is_reverse and not read.mate_is_reverse:
-                        disco_rf_reads += 1
-                    elif read.is_read1 and not read.is_reverse and read.mate_is_reverse:
-                        disco_rf_reads += 1
 
                 # for clipped reads, we needed to extend the region by 5 bp
                 all_reads_extended += 1
@@ -414,53 +471,18 @@ class AlignmentAnnotatorIllumina:
         
         
     def annotate_read_based_features(self):
-        """ Annotates SVs with read-based features for all bins around the SV breakpoints. """        
+        """ Annotates SVs with read-based features for all bins around the SV breakpoints. """
         
-        if self.sv_type == 'DEL' or self.sv_type == 'DUP' or self.sv_type == 'INV':
-            self.df_calls_annot.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I', 'ill_disco_ff_I', 'ill_disco_rr_I', 'ill_disco_rf_I']] = self.df_calls_annot.apply(lambda x: 
-                                                                            self.calculate_read_based_features(x['chrom'], x['start'] - 50, 
-                                                                            x['start'], 'I'), axis=1, result_type ='expand')
-        
-            self.df_calls_annot.loc[:, ['ill_isize_mean_II', 'ill_isize_std_II', 'ill_mapq_mean_II', 'ill_mapq_std_II', 'ill_splitreads_II', 'ill_clipreads_II', 'ill_disco_ff_II', 'ill_disco_rr_II', 'ill_disco_rf_II']] = self.df_calls_annot.apply(lambda x: 
-                                                                                self.calculate_read_based_features(x['chrom'], x['start'], 
-                                                                                x['start'] + 50, 'II'), axis=1, result_type ='expand')
-        
-            self.df_calls_annot.loc[:, ['ill_isize_mean_III', 'ill_isize_std_III', 'ill_mapq_mean_III', 'ill_mapq_std_III', 'ill_splitreads_III', 'ill_clipreads_III', 'ill_disco_ff_III', 'ill_disco_rr_III', 'ill_disco_rf_III']] = self.df_calls_annot.apply(lambda x: 
-                                                                                self.calculate_read_based_features(x['chrom'], x['end'] - 50, 
-                                                                                x['end'], 'III'), axis=1, result_type ='expand')
-
-            self.df_calls_annot.loc[:, ['ill_isize_mean_IV', 'ill_isize_std_IV', 'ill_mapq_mean_IV', 'ill_mapq_std_IV', 'ill_splitreads_IV', 'ill_clipreads_IV', 'ill_disco_ff_IV', 'ill_disco_rr_IV', 'ill_disco_rf_IV']] = self.df_calls_annot.apply(lambda x: 
-                                                                                self.calculate_read_based_features(x['chrom'], x['end'], 
-                                                                                x['end'] + 50, 'IV'), axis=1, result_type ='expand')
-            
-        elif self.sv_type == 'INS':
-            self.df_calls_annot.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I', 'ill_disco_ff_I', 'ill_disco_rr_I', 'ill_disco_rf_I']] = self.df_calls_annot.apply(lambda x: 
-                                                                            self.calculate_read_based_features(x['chrom'], x['start'] - 50, 
-                                                                            x['start'], 'I'), axis=1, result_type ='expand')
-        
-            self.df_calls_annot.loc[:, ['ill_isize_mean_II', 'ill_isize_std_II', 'ill_mapq_mean_II', 'ill_mapq_std_II', 'ill_splitreads_II', 'ill_clipreads_II', 'ill_disco_ff_II', 'ill_disco_rr_II', 'ill_disco_rf_II']] = self.df_calls_annot.apply(lambda x: 
-                                                                                self.calculate_read_based_features(x['chrom'], x['start'], 
-                                                                                x['start'] + 50, 'II'), axis=1, result_type ='expand')
-            
-        elif self.sv_type == 'BND':
-            self.df_calls_annot.loc[:, ['ill_isize_mean_I', 'ill_isize_std_I', 'ill_mapq_mean_I', 'ill_mapq_std_I', 'ill_splitreads_I', 'ill_clipreads_I', 'ill_disco_ff_I', 'ill_disco_rr_I', 'ill_disco_rf_I']] = self.df_calls_annot.apply(lambda x: 
-                                                                            self.calculate_read_based_features(x['chrom'], x['start'] - 50, 
-                                                                            x['start'], 'I'), axis=1, result_type ='expand')
-        
-            self.df_calls_annot.loc[:, ['ill_isize_mean_II', 'ill_isize_std_II', 'ill_mapq_mean_II', 'ill_mapq_std_II', 'ill_splitreads_II', 'ill_clipreads_II', 'ill_disco_ff_II', 'ill_disco_rr_II', 'ill_disco_rf_II']] = self.df_calls_annot.apply(lambda x: 
-                                                                                self.calculate_read_based_features(x['chrom'], x['start'], 
-                                                                                x['start'] + 50, 'II'), axis=1, result_type ='expand')
-
-            self.df_calls_annot.loc[:, ['ill_isize_mean_III', 'ill_isize_std_III', 'ill_mapq_mean_III', 'ill_mapq_std_III', 'ill_splitreads_III', 'ill_clipreads_III', 'ill_disco_ff_III', 'ill_disco_rr_III', 'ill_disco_rf_III']] = self.df_calls_annot.apply(lambda x: 
-                                                                                self.calculate_read_based_features(x['chrom_2'], x['end'] - 50, 
-                                                                                x['end'], 'III'), axis=1, result_type ='expand')
-
-            
-            self.df_calls_annot.loc[:, ['ill_isize_mean_IV', 'ill_isize_std_IV', 'ill_mapq_mean_IV', 'ill_mapq_std_IV', 'ill_splitreads_IV', 'ill_clipreads_IV', 'ill_disco_ff_IV', 'ill_disco_rr_IV', 'ill_disco_rf_IV']] = self.df_calls_annot.apply(lambda x: 
-                                                                                self.calculate_read_based_features(x['chrom_2'], x['end'], 
-                                                                                x['end'] + 50, 'IV'), axis=1, result_type ='expand')
-            
-            
+        for suffix, values in self.bin_dict_bps.items():
+            tqdm.pandas(desc=' '.join(['Annotation Reads:', self.log_message, suffix]), position=0, leave=True)
+            read_based_features = [feature + suffix for feature in self.features_breakpoints[2:]]
+            connection_features = [feature + suffix + '_' + conn for feature in self.features_connection for conn in self.bin_connections[suffix]]
+            self.df_calls_annot.loc[:, read_based_features] = self.df_calls_annot.progress_apply(lambda x: self.calculate_read_based_features(x[values[0]], 
+                                                                                                                                              x[values[1]] + values[3], 
+                                                                                                                                              x[values[2]] + values[4],
+                                                                                                                                              suffix), axis=1, result_type ='expand')
+                    
+             
     def aggregate_results(self):
         """ Cleans up result DataFrame. """        
             
