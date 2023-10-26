@@ -13,25 +13,48 @@ class Dicast:
         """ Initialize Dicast object. """
         
         self.sv_type = sv_type
-        self.cov_thr = 6 # Log2 threshold were feature collection was aborted
+        self.cov_thr = 5 # Log2 threshold were feature collection was aborted
         
         # Determine set of features to use
         self.features_var = ['sv_len']
         self.features_ref = ['rep_LINE', 'rep_SINE', 'rep_LTR', 'rep_DNA', 'rep_Simple_repeat', 'rep_Satellite', 'rep_Low_complexity',
                              'rep_Retroposon', 'rep_snRNA', 'rep_tRNA', 'rep_srpRNA', 'rep_rRNA','rep_RC', 'rep_scRNA', 'rep_RNA', 'rep_VNTR', 
                              'rep_STR', 'cpg_islands', 'centromeres', 'asmb_gaps', 'alt_haps', 'GC_content_left', 'GC_content_right']
-        self.features_aln = {'DEL': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
-                                     'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr'],
-                             'INS': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
-                                     'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr'],
-                             'INV': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
-                                     'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr'],
-                             'DUP': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
-                                     'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr'],
-                             'BND': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
-                                     'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr']}
-        suffices = ['I', 'II'] if self.sv_type == 'INS' else ['I', 'II', 'III', 'IV']
-        self.features = self.features_var + self.features_ref + [aln_feature + '_' + suffix for aln_feature in self.features_aln[self.sv_type] for suffix in suffices]
+        self.features_aln_bp = {'DEL': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                'INS': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                'INV': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                'DUP': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                'BND': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf']}
+        self.features_aln_body = {'DEL': ['ill_cov_mean', 'ill_cov_std'],
+                                  'INS': [],
+                                  'INV': ['ill_cov_mean', 'ill_cov_std'],
+                                  'DUP': ['ill_cov_mean', 'ill_cov_std'],
+                                  'BND': []}
+        self.features_aln_conn = {'DEL': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                  'INS': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                  'INV': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                  'DUP': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                  'BND': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf']}
+        
+        suffices_bp = ['I', 'II'] if self.sv_type == 'INS' else ['I', 'II', 'III', 'IV'] 
+        suffices_body = [] if self.sv_type == 'INS' or self.sv_type == 'BND' else ['IIa', 'IIb', 'IIIb', 'IIIa']
+        bin_connections = {'I' : ['II', 'III', 'IV'],
+                           'II' : ['III', 'IV'],
+                           'III' : ['IV'],
+                           'IV' : []}
+        
+        self.features_aln = [aln_feature + '_' + suffix for aln_feature in self.features_aln_bp[self.sv_type] for suffix in suffices_bp]
+        self.features_aln += [aln_feature + '_' + suffix for aln_feature in self.features_aln_body[self.sv_type] for suffix in suffices_body]
+        for feature in self.features_aln_conn[self.sv_type]:
+            for suffix in suffices_bp:
+                for suffix2 in bin_connections[suffix]:
+                    self.features_aln.append(feature + '_' + suffix + '_' + suffix2)
+        self.features = self.features_var + self.features_ref + self.features_aln
         
     
     def load_from_df(self, df_variants: pd.DataFrame):
@@ -160,7 +183,7 @@ class Dicast:
             self.model = pickle.load(f)
             
             
-    def to_database(self) -> pd.DataFrame:
+    def to_db(self) -> pd.DataFrame:
         """ Get predictions for variants.
 
         Returns:

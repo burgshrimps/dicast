@@ -2,6 +2,7 @@ import pysam
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+import re
 
 from dicast_lib.utils import mad
 
@@ -23,9 +24,9 @@ class AlignmentAnnotatorIllumina:
         self.chrom = chrom
         self.sv_type = sv_type
         self.features_breakpoints = ['ill_cov_mean_', 'ill_cov_std_', 'ill_isize_mean_', 'ill_isize_std_', 'ill_mapq_mean_', 'ill_mapq_std_', 
-                         'ill_clipreads_', 'ill_splitreads_', 'ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_']
+                                     'ill_clipreads_', 'ill_splitreads_', 'ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_']
         self.features_body = ['ill_cov_mean_', 'ill_cov_std_']
-        self.features_connection = ['ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_splitreads']
+        self.features_connection = ['ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_', 'ill_splitreads_']
         self.cov_thr = 5 # Threshold for log2 change in coverage to be considered for feature extraction, otherwise jump
         
         # Alignment file
@@ -39,28 +40,28 @@ class AlignmentAnnotatorIllumina:
         # Values are: [chrom, pos_col_left, pos_col_right, offset_left, offset_right, check_len]
         if self.sv_type == 'DEL' or self.sv_type == 'DUP' or self.sv_type == 'INV':
             # Bins around the breakpoints
-            self.bin_dict_bps = {'I' : ['chrom', 'start', 'start', -50, 0],
-                                 'II' : ['chrom', 'start', 'start', 0, 50],
-                                 'III' : ['chrom', 'end', 'end', -50, 0],
-                                 'IV' : ['chrom', 'end', 'end', 0, 50]}
+            self.bin_dict_bps = {'I' : ['chrom', 'start', 'start', -52, -2],
+                                 'II' : ['chrom', 'start', 'start', 2, 52],
+                                 'III' : ['chrom', 'end', 'end', -52, -2],
+                                 'IV' : ['chrom', 'end', 'end', 2, 52]}
             
             # Bins inside the SV body
-            self.bin_dict_body = {'IIa' : ['chrom', 'start', 'body_I', 50, 0],
+            self.bin_dict_body = {'IIa' : ['chrom', 'start', 'body_I', 52, 0],
                                   'IIb' : ['chrom', 'body_I', 'body_II', 0, 0],
                                   'IIIb' : ['chrom', 'body_II', 'body_III', 0, 0],
-                                  'IIIa' : ['chrom', 'body_III', 'end', 0, -50]}
+                                  'IIIa' : ['chrom', 'body_III', 'end', 0, -52]}
             
         elif self.sv_type == 'INS':
             # Bins around the breakpoints
-            self.bin_dict_bps = {'I' : ['chrom', 'start', 'start', -50, 0],
-                                 'II' : ['chrom', 'start', 'start', 0, 50]}
+            self.bin_dict_bps = {'I' : ['chrom', 'start', 'start', -52, -2],
+                                 'II' : ['chrom', 'start', 'start', 2, 52]}
             
         elif self.sv_type == 'BND':
             # Bins around the breakpoints
-            self.bin_dict_bps = {'I' : ['chrom', 'start', 'start', -50, 0],
-                                'II' : ['chrom', 'start', 'start', 0, 50],
-                                'III' : ['chrom_2', 'end', 'end', -50, 0],
-                                'IV' : ['chrom_2', 'end', 'end', 0, 50]}
+            self.bin_dict_bps = {'I' : ['chrom', 'start', 'start', -52, -2],
+                                'II' : ['chrom', 'start', 'start', 2, 52],
+                                'III' : ['chrom_2', 'end', 'end', -52, -2],
+                                'IV' : ['chrom_2', 'end', 'end', 2, 52]}
         
         # Define connections between bins    
         self.bin_connections = {'I' : ['II', 'III', 'IV'],
@@ -338,11 +339,13 @@ class AlignmentAnnotatorIllumina:
             
         if self.sv_type == 'DEL' or self.sv_type == 'DUP' or self.sv_type == 'INV':    
             # Generate borders for bins inside the SV body
-            self.df_calls_annot.loc[:, ['body_I', 'body_II', 'body_III']] = self.df_calls_annot.apply(lambda x: self.divide_sv_body(x['start'] + 50, x['end'] - 50), axis=1, result_type ='expand')
+            self.df_calls_annot.loc[:, ['body_I', 'body_II', 'body_III']] = self.df_calls_annot.apply(lambda x: self.divide_sv_body(x['start'] + 52, x['end'] - 52), axis=1, result_type ='expand')
             
             # Calculate coverage inside the SV body
             for suffix, values in self.bin_dict_body.items():
                 self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, values[0], values[1], values[2], values[3], values[4], suffix, check_len=True)
+                
+            self.df_calls_annot.drop(['body_I', 'body_II', 'body_III'], axis=1, inplace=True)
             
             
     def get_overlap(self, a: tuple, b: tuple) -> int:
@@ -384,63 +387,176 @@ class AlignmentAnnotatorIllumina:
         return None
     
     
-    def calculate_read_based_features(self, chrom: str, start: int, stop: int, suffix: str) -> pd.Series:
+    def get_end_position(self, start: int, cigar: str) -> int:
+        """ Calculates the end position of a read based on its start position and CIGAR string.
+
+        Args:
+            start (int): Start position
+            cigar (str): CIGAR string
+
+        Returns:
+            int: End position
+        """        
+    
+        cigar_tuples = [(int(length), op) for length, op in re.findall(r'(\d+)([MIDNSHP=X])', cigar)]
+        
+        # Because positions are inclusive
+        end = start - 1
+        for length, op in cigar_tuples:
+            if op in ["M", "D", "N", "=", "X"]:
+                end += length
+
+        return end
+    
+    
+    def get_overlap_mate_bins(self, read: pysam.AlignedSegment, bins: list) -> np.array:
+        """ Calculates the overlap between the mate of a read and all bins.
+
+        Args:
+            read (pysam.AlignedSegment): Sequencing Read
+            bins (list): List of tuples containing the start and end position of the bins
+
+        Returns:
+            np.array: For each bin, 1 if there is an overlap, 0 otherwise
+        """        
+    
+        conns = np.zeros(len(bins))
+        
+        if read.is_mapped:
+            for i, bin in enumerate(bins):
+                conns[i] += int(bool(self.get_overlap((read.next_reference_start, read.next_reference_start + 150), bin)))
+        
+        return conns
+    
+    
+    def suffix_to_bin_idx(self, suffix: str) -> int:
+        """ Converts a suffix to a bin index.
+
+        Args:
+            suffix (str): Suffix for column names
+
+        Returns:
+            int: Bin index
+        """        
+        
+        suffix_dict = {'I' : 1, 'II' : 2, 'III' : 3, 'IV' : 4}
+        
+        return suffix_dict[suffix]
+    
+    
+    def calculate_read_based_features(self, chrom: str, start: int, end: int, sv_start: int, sv_end: int, suffix: str) -> pd.Series:
         """ Calculates read-based features for a region.
 
         Args:
+            bam (pysam.AlignmentFile): BAM file
             chrom (str): Chromosome name
-            start (int): Start position
-            stop (int): End position
+            bin (int): bin number
+            bin_start (int): Bin Start position
+            bin_stop (int): Bin end position
+            start (int): SV start position
+            end (int): SV end position
             suffix (str): Suffix for column names
 
         Returns:
             pd.Series: Series containing the read-based features
-        """        
+        """  
         
+        # Set bins for overlap computations
+        bin_idx = self.suffix_to_bin_idx(suffix)
+        bins = [(sv_start + 2, sv_start + 52), (sv_end - 52, sv_end - 2), (sv_end + 2, sv_end + 52)][bin_idx-1:]      
+
+        # Initialize features
         insert_sizes = []
         mapqs = []
         all_reads = 0
         all_reads_extended = 0
         clipped_reads = 0
         split_reads = 0
+        split_reads_conn = np.zeros(4-bin_idx)
         disco_ff_reads = 0
+        disco_ff_conn = np.zeros(4-bin_idx)
         disco_rr_reads = 0
+        disco_rr_conn = np.zeros(4-bin_idx)
         disco_rf_reads = 0
+        disco_rf_conn = np.zeros(4-bin_idx)
 
-        for read in self.bam.fetch(chrom, start-5, stop+5):
-            # add 5 bp padding because clipped bases cannot be used to fetch reads from a BAM file
-            if not read.is_unmapped:
-                if not read.reference_end <= start and not read.reference_start >= stop:
+        # Define labels for binned split read features
+        labels_split_reads_conn = [f'ill_splitreads_{suffix}_II', f'ill_splitreads_{suffix}_III', f'ill_splitreads_{suffix}_IV'][bin_idx-1:]
+        
+        # Define labels for binned discordant read pair features
+        # CHANGE THIS TO THREE ARRAYS
+        labels_disco_conn = np.array([[f'ill_disco_ff_{suffix}_II', f'ill_disco_ff_{suffix}_III', f'ill_disco_ff_{suffix}_IV'], 
+                                      [f'ill_disco_rr_{suffix}_II', f'ill_disco_rr_{suffix}_III', f'ill_disco_rr_{suffix}_IV'], 
+                                      [f'ill_disco_rf_{suffix}_II',f'ill_disco_rf_{suffix}_III', f'ill_disco_rf_{suffix}_IV']])[:,bin_idx-1:]
+        labels_disco_conn = list(labels_disco_conn.flatten())
+        
+        # Iterate over reads in region
+        for read in self.bam.fetch(chrom, start - 5, end + 5):
+            
+            if not read.is_unmapped and not read.is_duplicate and not read.is_qcfail:
+                
+                # Only consider reads that overlap with the region for which we want to calculate the features
+                if not read.reference_end <= start and not read.reference_start >= end:
                     
-                    # only consider reads that overlap with the region for which we want to calculate the features
+                    # Insert size
                     insert_sizes.append(abs(read.template_length))
+                    
+                    # Mapping quality
                     mapqs.append(read.mapping_quality)
-                    all_reads += 1
+                    
+                    # Split-reads
                     if read.has_tag('SA'):
                         split_reads += 1
+                        supplementary_alignment = read.get_tag('SA').split(',')
+                        sa_cigar = supplementary_alignment[3]
+                        sa_chrom = supplementary_alignment[0]
+                        sa_start = int(supplementary_alignment[1])
+                        sa_end = self.get_end_position(sa_start, sa_cigar)
+                        
+                        if sa_chrom == chrom:
+                            for i, bin in enumerate(bins):
+                                split_reads_conn[i] += int(bool(self.get_overlap((sa_start, sa_end), bin)))
                         
                     # Read orientation for inversions
                     if read.is_reverse and read.mate_is_reverse:
                         disco_rr_reads += 1
-                    if not read.is_reverse and not read.mate_is_reverse:
+                        disco_rr_conn += self.get_overlap_mate_bins(read, bins)
+                        
+                    elif not read.is_reverse and not read.mate_is_reverse:
                         disco_ff_reads += 1
+                        disco_ff_conn += self.get_overlap_mate_bins(read, bins)
                     
                     # Read orientation for duplications
-                    if read.is_read1 and read.is_reverse and not read.mate_is_reverse:
+                    elif read.is_read1 and read.is_reverse and not read.mate_is_reverse and read.template_length>0:
                         disco_rf_reads += 1
-                    elif read.is_read2 and not read.is_reverse and read.mate_is_reverse:
+                        disco_rf_conn += self.get_overlap_mate_bins(read, bins)
+                        
+                    elif read.is_read1 and not read.is_reverse and read.mate_is_reverse and read.template_length<0:
                         disco_rf_reads += 1
+                        disco_rf_conn += self.get_overlap_mate_bins(read, bins)
+                        
+                    elif read.is_read2 and not read.is_reverse and read.mate_is_reverse and read.template_length<0:
+                        disco_rf_reads += 1
+                        disco_rf_conn += self.get_overlap_mate_bins(read, bins)
+                        
+                    elif read.is_read2 and read.is_reverse and not read.mate_is_reverse and read.template_length>0:
+                        disco_rf_reads += 1
+                        disco_rf_conn += self.get_overlap_mate_bins(read, bins)  
+                        
+                    all_reads += 1
 
-                # for clipped reads, we needed to extend the region by 5 bp
+                # For clipped reads, we needed to extend the region by 5 bp
                 all_reads_extended += 1
                 clip_span = self.get_clipped_span(read)
+                
                 if clip_span != None:
-                    overlap = self.get_overlap(clip_span, [start, stop])
+                    overlap = self.get_overlap(clip_span, [start, end])
+                    
                     if overlap > 0:
                         clipped_reads += 1
             
         if all_reads > 0:
-             # add 0.1 to avoid -inf values
+            # add 0.1 to avoid -inf values
             insertsize_mean = np.round(np.log2((np.mean(insert_sizes) + 0.1) / (self.baseline_insertsize_median + 0.1)), 3)
             insertsize_std = np.round(np.log2((np.std(insert_sizes) + 0.1) / (self.baseline_insertsize_mad + 0.1)), 3)
 
@@ -448,11 +564,20 @@ class AlignmentAnnotatorIllumina:
             mapping_quality_std = np.round(np.log2((np.std(mapqs) + 0.1) / (self.baseline_mapq_std + 0.1)), 3)
 
             splitreads_proportion = np.round(split_reads / all_reads, 3)
-            clippedreads_proportion = np.round(clipped_reads / all_reads_extended, 3)
-            disco_ff_proportion = np.round(disco_ff_reads / all_reads, 3)
-            disco_rr_proportion = np.round(disco_rr_reads / all_reads, 3)
-            disco_rf_proportion = np.round(disco_rf_reads / all_reads, 3)
+            if split_reads > 0:
+                split_reads_conn_proportion = np.round(split_reads_conn / split_reads, 3)
+            else:
+                split_reads_conn_proportion = split_reads_conn
             
+            clippedreads_proportion = np.round(clipped_reads / all_reads_extended, 3)
+            
+            disco_ff_proportion = np.round(disco_ff_reads / all_reads, 3)
+            disco_ff_conn_proportion = np.round(disco_ff_conn / disco_ff_reads, 3) if disco_ff_reads > 0 else disco_ff_conn
+            disco_rr_proportion = np.round(disco_rr_reads / all_reads, 3)
+            disco_rr_conn_proportion = np.round(disco_rr_conn / disco_rr_reads, 3) if disco_rr_reads > 0 else disco_rr_conn
+            disco_rf_proportion = np.round(disco_rf_reads / all_reads, 3)
+            disco_rf_conn_proportion = np.round(disco_rf_conn / disco_rf_reads, 3) if disco_rf_reads > 0 else disco_rf_conn
+
         else:
             # special case: no reads in region
             insertsize_mean = np.round(np.log2(0.1 / (self.baseline_insertsize_median + 0.1)), 3)
@@ -462,12 +587,25 @@ class AlignmentAnnotatorIllumina:
             mapping_quality_std = np.round(np.log2(0.1 / (self.baseline_mapq_std + 0.1)), 3)
 
             splitreads_proportion = 0
+            split_reads_conn_proportion = split_reads_conn
+            
             clippedreads_proportion = 0
+            
             disco_ff_proportion = 0
+            disco_ff_conn_proportion = disco_ff_conn
             disco_rr_proportion = 0
+            disco_rr_conn_proportion = disco_rr_conn
             disco_rf_proportion = 0
+            disco_rf_conn_proportion = disco_rf_conn
 
-        return pd.Series([insertsize_mean, insertsize_std, mapping_quality_mean, mapping_quality_std, splitreads_proportion, clippedreads_proportion, disco_ff_proportion, disco_rr_proportion, disco_rf_proportion], index =['ill_isize_mean_' + suffix, 'ill_isize_std_' + suffix, 'ill_mapq_mean_' + suffix, 'ill_mapq_std_' + suffix, 'ill_splitreads_' + suffix, 'ill_clipreads_' + suffix, 'ill_disco_ff_' + suffix, 'ill_disco_rr_' + suffix, 'ill_disco_rf_' + suffix])
+        values = [insertsize_mean, insertsize_std, mapping_quality_mean, mapping_quality_std, 
+                splitreads_proportion, clippedreads_proportion, disco_ff_proportion, disco_rr_proportion, 
+                disco_rf_proportion] + list(split_reads_conn_proportion) + list(disco_ff_conn_proportion) + list(disco_rr_conn_proportion) + list(disco_rf_conn_proportion)
+        index = ['ill_isize_mean_' + suffix, 'ill_isize_std_' + suffix, 'ill_mapq_mean_' + suffix, 'ill_mapq_std_' + suffix, 
+                'ill_splitreads_' + suffix, 'ill_clipreads_' + suffix, 'ill_disco_ff_' + suffix, 'ill_disco_rr_' + suffix, 
+                'ill_disco_rf_' + suffix] + labels_split_reads_conn + labels_disco_conn
+        
+        return pd.Series(values, index=index)
         
         
     def annotate_read_based_features(self):
@@ -477,10 +615,12 @@ class AlignmentAnnotatorIllumina:
             tqdm.pandas(desc=' '.join(['Annotation Reads:', self.log_message, suffix]), position=0, leave=True)
             read_based_features = [feature + suffix for feature in self.features_breakpoints[2:]]
             connection_features = [feature + suffix + '_' + conn for feature in self.features_connection for conn in self.bin_connections[suffix]]
-            self.df_calls_annot.loc[:, read_based_features] = self.df_calls_annot.progress_apply(lambda x: self.calculate_read_based_features(x[values[0]], 
-                                                                                                                                              x[values[1]] + values[3], 
-                                                                                                                                              x[values[2]] + values[4],
-                                                                                                                                              suffix), axis=1, result_type ='expand')
+            self.df_calls_annot.loc[:, read_based_features + connection_features] = self.df_calls_annot.progress_apply(lambda x: self.calculate_read_based_features(x[values[0]], 
+                                                                                                                              x[values[1]] + values[3], 
+                                                                                                                              x[values[2]] + values[4],
+                                                                                                                              x['start'],
+                                                                                                                              x['end'],
+                                                                                                                              suffix), axis=1, result_type ='expand')
                     
              
     def aggregate_results(self):
@@ -501,15 +641,9 @@ class AlignmentAnnotatorIllumina:
             for i in range(4):
                 for j in range(i+1, 4):
                     alignment_columns.append(feature + suffices[i] + '_' + suffices[j])
-                
+        
         columns_reordered = ['id', 'cohort', 'sample', 'reference', 'technology', 'caller', 'sv_type', 'chrom', 'chrom_2', 'start', 'end'] + alignment_columns
-        try:
-            self.df_calls_annot = self.df_calls_annot[columns_reordered]
-        except KeyError:
-            print('#######')
-            print(self.sv_type)
-            print(self.df_calls_annot.columns)
-            print('#######')
+        self.df_calls_annot = self.df_calls_annot[columns_reordered]
         self.bam.close()
         
         
