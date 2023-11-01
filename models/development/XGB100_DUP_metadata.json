@@ -1,5 +1,5 @@
 {
-    "date": "2023-09-25 12:26:01",
+    "date": "2023-10-31 23:19:15",
     "model_type": "XGBoost",
     "model_params": {
         "n_estimators": 100,
@@ -70,7 +70,43 @@
         "ill_disco_rr_I",
         "ill_disco_rr_II",
         "ill_disco_rr_III",
-        "ill_disco_rr_IV"
+        "ill_disco_rr_IV",
+        "ill_disco_rf_I",
+        "ill_disco_rf_II",
+        "ill_disco_rf_III",
+        "ill_disco_rf_IV",
+        "ill_cov_mean_IIa",
+        "ill_cov_mean_IIb",
+        "ill_cov_mean_IIIb",
+        "ill_cov_mean_IIIa",
+        "ill_cov_std_IIa",
+        "ill_cov_std_IIb",
+        "ill_cov_std_IIIb",
+        "ill_cov_std_IIIa",
+        "ill_splitreads_I_II",
+        "ill_splitreads_I_III",
+        "ill_splitreads_I_IV",
+        "ill_splitreads_II_III",
+        "ill_splitreads_II_IV",
+        "ill_splitreads_III_IV",
+        "ill_disco_ff_I_II",
+        "ill_disco_ff_I_III",
+        "ill_disco_ff_I_IV",
+        "ill_disco_ff_II_III",
+        "ill_disco_ff_II_IV",
+        "ill_disco_ff_III_IV",
+        "ill_disco_rr_I_II",
+        "ill_disco_rr_I_III",
+        "ill_disco_rr_I_IV",
+        "ill_disco_rr_II_III",
+        "ill_disco_rr_II_IV",
+        "ill_disco_rr_III_IV",
+        "ill_disco_rf_I_II",
+        "ill_disco_rf_I_III",
+        "ill_disco_rf_I_IV",
+        "ill_disco_rf_II_III",
+        "ill_disco_rf_II_IV",
+        "ill_disco_rf_III_IV"
     ],
     "sv_type": "DUP",
     "reference": "hg38",
@@ -78,10 +114,15 @@
         "tgenvar"
     ],
     "samples": [
-        "17-08",
         "906-02",
         "17-01",
-        "18-5047"
+        "18-5047",
+        "2048-07",
+        "1352-03",
+        "159-98",
+        "176-98",
+        "191-98",
+        "319-99"
     ],
     "callers": [
         "delly",
@@ -91,7 +132,7 @@
         "cnvnator"
     ],
     "chroms_train": [],
-    "number_variants": 114815,
-    "number_variants_positive": 242,
-    "number_variants_negative": 114573
+    "number_variants": 121693,
+    "number_variants_positive": 8406,
+    "number_variants_negative": 113287
 }

@@ -29,7 +29,7 @@ class AlignmentAnnotatorIllumina:
         self.features_connection = ['ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_', 'ill_splitreads_']
         self.cov_thr = 5 # Threshold for log2 change in coverage to be considered for feature extraction, otherwise jump
         
-        # Alignment file
+        # Alignment file'
         self.alignment_file = bam_filename
         self.bam = pysam.AlignmentFile(self.alignment_file, 'rb')
         
@@ -117,7 +117,7 @@ class AlignmentAnnotatorIllumina:
         self.prepare_dataframe()
         
         
-    def calculate_coverage_baseline(self, s: int=100000, n: int=100):
+    def calculate_coverage_baseline(self, s: int=1000, n: int=1000):
         """ Calculates baseline mean and std coverage based on n sampled regions of size s from the respective chromosome.
 
         Args:
@@ -133,22 +133,27 @@ class AlignmentAnnotatorIllumina:
             chrom_idx = 24
         else:
             chrom_idx = int(self.chrom[3:]) - 1
+            
         self.baseline_coverage_mean = 0
         self.baseline_coverage_std = 0
+        baseline_coverage_mean = []
+        baseline_coverage_std = []
         
         for i in range(n):
             start = np.random.randint(0, self.bam.lengths[chrom_idx])
             stop = start + s
             region = self.chrom + ':' + str(start) + '-' + str(stop)
-            df = pd.DataFrame([x.split('\t') for x in pysam.depth(self.alignment_file, 
-                                                                  '-r', region, '-a', '-g', 'SECONDARY,SUPPLEMENTARY').split('\n')[:-1]])
-            df.rename({0 : 'chrom', 1 : 'pos', 2 : 'coverage'}, axis=1, inplace=True)
-            df['coverage'] = df['coverage'].astype(int)
-            self.baseline_coverage_mean += df['coverage'].mean()
-            self.baseline_coverage_std += df['coverage'].std()
+            
+            coverage = [0] * (stop - start + 1)
+            for pileupcolumn in self.bam.pileup(self.chrom, start, stop, min_mapping_quality=20, flag_filter=1540, stepper='samtools', ignore_orphans=False, ignore_overlaps=False):
+                if start <= pileupcolumn.pos <= stop:
+                    coverage[pileupcolumn.pos - start] = pileupcolumn.nsegments
+            
+            baseline_coverage_mean.append(np.mean(coverage))
+            baseline_coverage_std.append(np.std(coverage))
 
-        self.baseline_coverage_mean /= n
-        self.baseline_coverage_std /= n
+        self.baseline_coverage_mean = np.median(baseline_coverage_mean)
+        self.baseline_coverage_std = np.median(baseline_coverage_std)
         
         
     def calculate_insertsize_baseline(self, s: int=1000, n: int=1000):
