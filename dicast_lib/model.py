@@ -136,9 +136,11 @@ class Dicast:
             self.variants_predict = self.variants.copy()
             
         # Predict
-        X = self.variants_predict[self.features]
-        
-        self.variants_predict['dicast_qual'] = np.round(self.model.predict_proba(X)[:, 1], 3)
+        if self.variants_predict.shape[0] > 0:
+            X = self.variants_predict[self.features]
+            self.variants_predict['dicast_qual'] = np.round(self.model.predict_proba(X)[:, 1], 3)
+        else:
+            self.variants_predict['dicast_qual'] = np.nan
         
         
     def save_model(self, model_filename: str):
