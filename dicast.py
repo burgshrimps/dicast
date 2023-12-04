@@ -24,7 +24,7 @@ chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8',
         'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
 
 # List of SV types currently supported by dicast
-sv_types = ['DEL']
+sv_types = ['DEL', 'DUP']
 
 
 def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot_filename: str, chrom: str, sv_type: str, sample: str):
