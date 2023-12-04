@@ -9,6 +9,7 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_call = subparsers.add_parser('call', help='Feature extraction and variant prediction')
     parser_call.add_argument('--cohort', help='Cohort name')
     parser_call.add_argument('--sample', help='Sample name')
+    parser_call.add_argument('--chrom', help='Chromosome', default='all')
     parser_call.add_argument('--ref', help='Reference genome name', default='hg38')
     parser_call.add_argument('--technology', help='Sequencing technology name', default='ill')
     parser_call.add_argument('--workdir', help='Working and output directory')

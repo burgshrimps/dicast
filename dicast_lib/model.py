@@ -64,12 +64,13 @@ class Dicast:
             df_variants (pd.DataFrame): Dataframe containing variants with features
         """        
         
-        self.variants = df_variants
+        self.variants = df_variants[df_variants['sv_type'] == self.sv_type].copy().reset_index(drop=True)
         
         
     def load_from_csv(self, variant_filename: str):
     
         self.variants = pd.read_csv(variant_filename, sep='\t', low_memory=False)
+        self.variants = self.variants[self.variants['sv_type'] == self.sv_type].copy().reset_index(drop=True)
         
         
     def impute_missing_values(self):

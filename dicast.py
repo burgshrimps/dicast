@@ -27,12 +27,12 @@ chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8',
 sv_types = ['DEL']
 
 
-def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot_filename: str, chrom: str, sv_type: str):
+def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot_filename: str, chrom: str, sv_type: str, sample: str):
     """ Collects alignment features for a given chromosome. 
     
     param chrom: Chromosome name """
 
-    AAI = AlignmentAnnotatorIllumina(bam_filename, chrom, sv_type)
+    AAI = AlignmentAnnotatorIllumina(bam_filename, chrom, sv_type, sample)
     AAI.load_from_csv(variant_filename)
     AAI.calculate_coverage_baseline()
     AAI.calculate_insertsize_baseline()
@@ -50,8 +50,8 @@ def combine_feature_files(sample: str, ref: str, workdir: str):
     filenames_aln_ill = glob(f'{workdir}/{sample}_{ref}.SVs.aln.ill.*.*.tsv')
     df_aln_ill = pd.concat([pd.read_csv(f, sep='\t') for f in filenames_aln_ill], ignore_index=True)
     
-    df = df_raw.merge(df_ref.drop(['sample', 'sv_type', 'chrom', 'chrom_2', 'start', 'end'], axis=1), on='id', how='inner')
-    df = df.merge(df_aln_ill.drop(['sample', 'sv_type', 'chrom', 'chrom_2', 'start', 'end'], axis=1), on='id', how='inner')
+    df = df_raw.merge(df_ref.drop(['sample', 'sv_type', 'chrom', 'chrom_2', 'start', 'end', 'cohort', 'technology', 'caller', 'reference'], axis=1), on='id', how='inner')
+    df = df.merge(df_aln_ill.drop(['sample', 'sv_type', 'chrom', 'chrom_2', 'start', 'end', 'cohort', 'technology', 'caller', 'reference', 'sv_len'], axis=1), on='id', how='inner')
 
     return df
 
@@ -107,6 +107,7 @@ if __name__ == '__main__':
         logging.info('MODE: call')
         logging.info(f'COHORT: {arguments.cohort}')
         logging.info(f'SAMPLE: {arguments.sample}')
+        logging.info(f'CHROM: {arguments.chrom}')
         logging.info(f'REF: {arguments.ref}')
         logging.info(f'TECH: {arguments.technology}')
         logging.info(f'WORKDIR: {arguments.workdir}')
@@ -127,6 +128,11 @@ if __name__ == '__main__':
         print('')
         
         logging.info('# Create Variant DataFrame')
+        if arguments.chrom == 'all':
+            chroms = chroms
+        else:
+            chroms = [arguments.chrom]
+        
         VP = VariantPrep(arguments.cohort, arguments.sample, arguments.ref, arguments.workdir, 
                          arguments.technology, arguments.vcfs, chroms, arguments.fai, sv_types)
         logging.info('# Read Variants')
@@ -182,7 +188,7 @@ if __name__ == '__main__':
                     
                     variant_filename = '/'.join([arguments.workdir, arguments.sample + '_' + arguments.ref + '.SVs.raw.tsv'])
                     variant_annot_filename = '/'.join([arguments.workdir, arguments.sample + '_' + arguments.ref + '.SVs.aln.ill.' + chrom + '.' + sv_type + '.tsv'])
-                    parallel_input.append((arguments.bam, variant_filename, variant_annot_filename, chrom, sv_type))
+                    parallel_input.append((arguments.bam, variant_filename, variant_annot_filename, chrom, sv_type, arguments.sample))
             
             Parallel(n_jobs=arguments.threads)(delayed(collect_aln_features)(*args) for args in parallel_input)
         
