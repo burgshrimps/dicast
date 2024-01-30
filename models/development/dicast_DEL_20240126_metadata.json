@@ -1,5 +1,5 @@
 {
-    "date": "2023-10-31 23:19:15",
+    "date": "2024-01-26 13:40:45",
     "model_type": "XGBoost",
     "model_params": {
         "n_estimators": 100,
@@ -108,7 +108,7 @@
         "ill_disco_rf_II_IV",
         "ill_disco_rf_III_IV"
     ],
-    "sv_type": "DUP",
+    "sv_type": "DEL",
     "reference": "hg38",
     "cohorts": [
         "tgenvar"
@@ -128,11 +128,11 @@
         "delly",
         "manta",
         "lumpy",
-        "gridss",
-        "cnvnator"
+        "cnvnator",
+        "gridss"
     ],
     "chroms_train": [],
-    "number_variants": 121693,
-    "number_variants_positive": 8406,
-    "number_variants_negative": 113287
+    "number_variants": 243487,
+    "number_variants_positive": 135801,
+    "number_variants_negative": 107686
 }

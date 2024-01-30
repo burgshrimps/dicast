@@ -1,10 +1,10 @@
 {
-    "date": "2023-11-29 13:45:03",
+    "date": "2024-01-30 01:10:11",
     "model_type": "XGBoost",
     "model_params": {
-        "n_estimators": 100,
+        "n_estimators": 200,
         "random_state": 0,
-        "n_jobs": 20
+        "n_jobs": 40
     },
     "features": [
         "sv_len",
@@ -114,19 +114,23 @@
         "tgenvar"
     ],
     "samples": [
-        "17-08",
         "906-02",
-        "17-01",
-        "18-5047"
+        "2048-07",
+        "1352-03",
+        "159-98",
+        "176-98",
+        "191-98",
+        "319-99"
     ],
     "callers": [
         "delly",
         "manta",
         "lumpy",
-        "cnvnator"
+        "cnvnator",
+        "gridss"
     ],
     "chroms_train": [],
-    "number_variants": 78142,
-    "number_variants_positive": 43847,
-    "number_variants_negative": 34295
+    "number_variants": 184635,
+    "number_variants_positive": 107479,
+    "number_variants_negative": 77156
 }
