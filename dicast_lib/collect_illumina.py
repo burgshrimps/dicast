@@ -286,7 +286,7 @@ class AlignmentAnnotatorIllumina:
         df = df.copy()
         i = 0
         all_exclude_idx = []
-        pbar = tqdm(total=len(df), desc=' '.join(['Annotation Coverage:', self.log_message, suffix]), position=0, leave=True)
+        #pbar = tqdm(total=len(df), desc=' '.join(['Annotation Coverage:', self.log_message, suffix]), position=0, leave=True)
         
         while i < len(df):
             
@@ -297,7 +297,7 @@ class AlignmentAnnotatorIllumina:
                     breakpoint_suffix = suffix[:-1]
                     df.loc[i, ['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix]] = df.loc[i, ['ill_cov_mean_' + breakpoint_suffix, 'ill_cov_std_' + breakpoint_suffix]]
                     i += 1
-                    pbar.update(1)
+                    #pbar.update(1)
                     continue
                      
                 elif sv_len < 5000:
@@ -310,7 +310,7 @@ class AlignmentAnnotatorIllumina:
                     
                 df.loc[i, ['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix]] = self.calculate_coverage_region(df.loc[i, chrom_col], left_border, right_border, suffix)
                 i += 1
-                pbar.update(1)
+                #pbar.update(1)
                 
             else:       
                 left_border = df.loc[i, pos_col_left] + offset_left
@@ -320,7 +320,7 @@ class AlignmentAnnotatorIllumina:
                 step_size, exclude_idx = self.jump_to_next_variant_for_coverage_calculation(df, i, pos_col_left, pos_col_right, offset_left, offset_right, suffix)
                 i += step_size
                 all_exclude_idx += exclude_idx
-                pbar.update(step_size)
+                #pbar.update(step_size)
 
         df.drop(all_exclude_idx, inplace=True)
         df.reset_index(drop=True, inplace=True)
@@ -474,7 +474,7 @@ class AlignmentAnnotatorIllumina:
         insert_sizes = []
         mapqs = []
         all_reads = 0
-        all_reads_extended = 0
+        all_reads_extended_ids = set()
         clipped_reads = 0
         split_reads = 0
         split_reads_conn = np.zeros(4-bin_idx)
@@ -496,7 +496,7 @@ class AlignmentAnnotatorIllumina:
         labels_disco_conn = list(labels_disco_conn.flatten())
         
         # Iterate over reads in region
-        for read in self.bam.fetch(chrom, start - 5, end + 5):
+        for read in self.bam.fetch(chrom, start - 20, end + 20):
             
             if not read.is_unmapped and not read.is_duplicate and not read.is_qcfail:
                 
@@ -508,19 +508,6 @@ class AlignmentAnnotatorIllumina:
                     
                     # Mapping quality
                     mapqs.append(read.mapping_quality)
-                    
-                    # Split-reads
-                    if read.has_tag('SA'):
-                        split_reads += 1
-                        supplementary_alignment = read.get_tag('SA').split(',')
-                        sa_cigar = supplementary_alignment[3]
-                        sa_chrom = supplementary_alignment[0]
-                        sa_start = int(supplementary_alignment[1])
-                        sa_end = self.get_end_position(sa_start, sa_cigar)
-                        
-                        if sa_chrom == chrom:
-                            for i, bin in enumerate(bins):
-                                split_reads_conn[i] += int(bool(self.get_overlap((sa_start, sa_end), bin)))
                         
                     # Read orientation for inversions
                     if read.is_reverse and read.mate_is_reverse:
@@ -547,11 +534,13 @@ class AlignmentAnnotatorIllumina:
                     elif read.is_read2 and read.is_reverse and not read.mate_is_reverse and read.template_length>0:
                         disco_rf_reads += 1
                         disco_rf_conn += self.get_overlap_mate_bins(read, bins)  
-                        
+                    
+                    # Count number of reads for normalization 
+                    read_id = read.query_name + '_' + str(int(read.is_read1)) + str(int(read.is_supplementary)) + str(int(read.is_secondary))
+                    all_reads_extended_ids.add(read_id)
                     all_reads += 1
 
-                # For clipped reads, we needed to extend the region by 5 bp
-                all_reads_extended += 1
+                # Clipped reads
                 clip_span = self.get_clipped_span(read)
                 
                 if clip_span != None:
@@ -559,23 +548,39 @@ class AlignmentAnnotatorIllumina:
                     
                     if overlap > 0:
                         clipped_reads += 1
-            
+                        read_id = read.query_name + '_' + str(int(read.is_read1)) + str(int(read.is_supplementary)) + str(int(read.is_secondary))
+                        all_reads_extended_ids.add(read_id)
+                        
+                        # Split-reads
+                        if read.has_tag('SA'):
+                            split_reads += 1
+                            
+                            # Split-read connections
+                            supplementary_alignment = read.get_tag('SA').split(',')
+                            sa_cigar = supplementary_alignment[3]
+                            sa_chrom = supplementary_alignment[0]
+                            sa_start = int(supplementary_alignment[1])
+                            sa_end = self.get_end_position(sa_start, sa_cigar)
+                            
+                            if sa_chrom == chrom:
+                                for i, bin in enumerate(bins):
+                                    split_reads_conn[i] += int(bool(self.get_overlap((sa_start, sa_end), bin)))
+        
+        # Number of reads including clipped reads whose aligned segment falls outside current bin
+        all_reads_extended = len(all_reads_extended_ids)
+         
         if all_reads > 0:
-            # add 0.1 to avoid -inf values
+            # Case that we have aligned reads in bin, add 0.1 to avoid -inf values
+            
+            # Normalize insert size
             insertsize_mean = np.round(np.log2((np.mean(insert_sizes) + 0.1) / (self.baseline_insertsize_median + 0.1)), 3)
             insertsize_std = np.round(np.log2((np.std(insert_sizes) + 0.1) / (self.baseline_insertsize_mad + 0.1)), 3)
 
+            # Normalize mapping quality
             mapping_quality_mean = np.round(np.log2((np.mean(mapqs) + 0.1) / (self.baseline_mapq_mean + 0.1)), 3)
             mapping_quality_std = np.round(np.log2((np.std(mapqs) + 0.1) / (self.baseline_mapq_std + 0.1)), 3)
-
-            splitreads_proportion = np.round(split_reads / all_reads, 3)
-            if split_reads > 0:
-                split_reads_conn_proportion = np.round(split_reads_conn / split_reads, 3)
-            else:
-                split_reads_conn_proportion = split_reads_conn
             
-            clippedreads_proportion = np.round(clipped_reads / all_reads_extended, 3)
-            
+            # Normalize discordant read pair features
             disco_ff_proportion = np.round(disco_ff_reads / all_reads, 3)
             disco_ff_conn_proportion = np.round(disco_ff_conn / disco_ff_reads, 3) if disco_ff_reads > 0 else disco_ff_conn
             disco_rr_proportion = np.round(disco_rr_reads / all_reads, 3)
@@ -584,25 +589,48 @@ class AlignmentAnnotatorIllumina:
             disco_rf_conn_proportion = np.round(disco_rf_conn / disco_rf_reads, 3) if disco_rf_reads > 0 else disco_rf_conn
 
         else:
-            # special case: no reads in region
+            # Case that we have no aligned reads in bin
+            
+            # Set insert size to 0
             insertsize_mean = np.round(np.log2(0.1 / (self.baseline_insertsize_median + 0.1)), 3)
             insertsize_std = np.round(np.log2(0.1 / (self.baseline_insertsize_mad + 0.1)), 3)
 
+            # Set mapping quality to 0
             mapping_quality_mean = np.round(np.log2(0.1 / (self.baseline_mapq_mean + 0.1)), 3)
             mapping_quality_std = np.round(np.log2(0.1 / (self.baseline_mapq_std + 0.1)), 3)
-
-            splitreads_proportion = 0
-            split_reads_conn_proportion = split_reads_conn
             
-            clippedreads_proportion = 0
-            
+            # Set discordant read pair features to 0
             disco_ff_proportion = 0
             disco_ff_conn_proportion = disco_ff_conn
             disco_rr_proportion = 0
             disco_rr_conn_proportion = disco_rr_conn
             disco_rf_proportion = 0
             disco_rf_conn_proportion = disco_rf_conn
-
+            
+        if all_reads_extended > 0:
+            # Case that we have reads in the extended bin, possibly corresponding to clipped reads
+            
+            # Normalize split-reads
+            splitreads_proportion = np.round(split_reads / all_reads_extended, 3)
+            if split_reads > 0:
+                split_reads_conn_proportion = np.round(split_reads_conn / split_reads, 3)
+            else:
+                split_reads_conn_proportion = split_reads_conn
+            
+            # Normalize clipped reads
+            clippedreads_proportion = np.round(clipped_reads / all_reads_extended, 3)
+            
+        else:
+            # Case that we have no reads in the extended bin
+            
+            # Set split-reads to 0
+            splitreads_proportion = 0
+            split_reads_conn_proportion = split_reads_conn
+            
+            # Set clipped reads to 0
+            clippedreads_proportion = 0
+        
+        # Create output pandas Series
         values = [insertsize_mean, insertsize_std, mapping_quality_mean, mapping_quality_std, 
                 splitreads_proportion, clippedreads_proportion, disco_ff_proportion, disco_rr_proportion, 
                 disco_rf_proportion] + list(split_reads_conn_proportion) + list(disco_ff_conn_proportion) + list(disco_rr_conn_proportion) + list(disco_rf_conn_proportion)
@@ -617,10 +645,10 @@ class AlignmentAnnotatorIllumina:
         """ Annotates SVs with read-based features for all bins around the SV breakpoints. """
         
         for suffix, values in self.bin_dict_bps.items():
-            tqdm.pandas(desc=' '.join(['Annotation Reads:', self.log_message, suffix]), position=0, leave=True)
+            #tqdm.pandas(desc=' '.join(['Annotation Reads:', self.log_message, suffix]), position=0, leave=True)
             read_based_features = [feature + suffix for feature in self.features_breakpoints[2:]]
             connection_features = [feature + suffix + '_' + conn for feature in self.features_connection for conn in self.bin_connections[suffix]]
-            self.df_calls_annot.loc[:, read_based_features + connection_features] = self.df_calls_annot.progress_apply(lambda x: self.calculate_read_based_features(x[values[0]], 
+            self.df_calls_annot.loc[:, read_based_features + connection_features] = self.df_calls_annot.apply(lambda x: self.calculate_read_based_features(x[values[0]], 
                                                                                                                               x[values[1]] + values[3], 
                                                                                                                               x[values[2]] + values[4],
                                                                                                                               x['start'],
