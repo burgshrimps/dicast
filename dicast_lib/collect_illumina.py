@@ -24,7 +24,7 @@ class AlignmentAnnotatorIllumina:
         self.chrom = chrom
         self.sv_type = sv_type
         self.features_breakpoints = ['ill_cov_mean_', 'ill_cov_std_', 'ill_isize_mean_', 'ill_isize_std_', 'ill_mapq_mean_', 'ill_mapq_std_', 
-                                     'ill_clipreads_', 'ill_splitreads_', 'ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_']
+                                     'ill_clipreads_', 'ill_splitreads_', 'ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_', 'ill_disco_tx_']
         self.features_body = ['ill_cov_mean_', 'ill_cov_std_']
         self.features_connection = ['ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_', 'ill_splitreads_']
         self.cov_thr = 5 # Threshold for log2 change in coverage to be considered for feature extraction, otherwise jump
@@ -337,12 +337,13 @@ class AlignmentAnnotatorIllumina:
         
     def annotate_coverage(self):
         """ Annotates SVs with mean and std coverage for all bins around the SV breakpoints. """        
-
+        
         # Calculate coverage around breakpoints
         for suffix, values in self.bin_dict_bps.items():
             self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, values[0], values[1], values[2], values[3], values[4], suffix)
             
         if self.sv_type == 'DEL' or self.sv_type == 'DUP' or self.sv_type == 'INV':    
+            
             # Generate borders for bins inside the SV body
             self.df_calls_annot.loc[:, ['body_I', 'body_II', 'body_III']] = self.df_calls_annot.apply(lambda x: self.divide_sv_body(x['start'] + 52, x['end'] - 52), axis=1, result_type ='expand')
             
@@ -484,6 +485,7 @@ class AlignmentAnnotatorIllumina:
         disco_rr_conn = np.zeros(4-bin_idx)
         disco_rf_reads = 0
         disco_rf_conn = np.zeros(4-bin_idx)
+        disco_tx_reads = 0
 
         # Define labels for binned split read features
         labels_split_reads_conn = [f'ill_splitreads_{suffix}_II', f'ill_splitreads_{suffix}_III', f'ill_splitreads_{suffix}_IV'][bin_idx-1:]
@@ -534,6 +536,10 @@ class AlignmentAnnotatorIllumina:
                     elif read.is_read2 and read.is_reverse and not read.mate_is_reverse and read.template_length>0:
                         disco_rf_reads += 1
                         disco_rf_conn += self.get_overlap_mate_bins(read, bins)  
+                        
+                    # Read orientation for translocations
+                    elif read.reference_id != read.next_reference_id:
+                        disco_tx_reads += 1
                     
                     # Count number of reads for normalization 
                     read_id = read.query_name + '_' + str(int(read.is_read1)) + str(int(read.is_supplementary)) + str(int(read.is_secondary))
@@ -587,6 +593,7 @@ class AlignmentAnnotatorIllumina:
             disco_rr_conn_proportion = np.round(disco_rr_conn / disco_rr_reads, 3) if disco_rr_reads > 0 else disco_rr_conn
             disco_rf_proportion = np.round(disco_rf_reads / all_reads, 3)
             disco_rf_conn_proportion = np.round(disco_rf_conn / disco_rf_reads, 3) if disco_rf_reads > 0 else disco_rf_conn
+            disco_tx_proportion = np.round(disco_tx_reads / all_reads, 3)
 
         else:
             # Case that we have no aligned reads in bin
@@ -606,6 +613,7 @@ class AlignmentAnnotatorIllumina:
             disco_rr_conn_proportion = disco_rr_conn
             disco_rf_proportion = 0
             disco_rf_conn_proportion = disco_rf_conn
+            disco_tx_proportion = 0
             
         if all_reads_extended > 0:
             # Case that we have reads in the extended bin, possibly corresponding to clipped reads
@@ -633,10 +641,10 @@ class AlignmentAnnotatorIllumina:
         # Create output pandas Series
         values = [insertsize_mean, insertsize_std, mapping_quality_mean, mapping_quality_std, 
                 splitreads_proportion, clippedreads_proportion, disco_ff_proportion, disco_rr_proportion, 
-                disco_rf_proportion] + list(split_reads_conn_proportion) + list(disco_ff_conn_proportion) + list(disco_rr_conn_proportion) + list(disco_rf_conn_proportion)
+                disco_rf_proportion, disco_tx_proportion] + list(split_reads_conn_proportion) + list(disco_ff_conn_proportion) + list(disco_rr_conn_proportion) + list(disco_rf_conn_proportion)
         index = ['ill_isize_mean_' + suffix, 'ill_isize_std_' + suffix, 'ill_mapq_mean_' + suffix, 'ill_mapq_std_' + suffix, 
                 'ill_splitreads_' + suffix, 'ill_clipreads_' + suffix, 'ill_disco_ff_' + suffix, 'ill_disco_rr_' + suffix, 
-                'ill_disco_rf_' + suffix] + labels_split_reads_conn + labels_disco_conn
+                'ill_disco_rf_' + suffix, 'ill_disco_tx_' + suffix] + labels_split_reads_conn + labels_disco_conn
         
         return pd.Series(values, index=index)
         
@@ -649,12 +657,12 @@ class AlignmentAnnotatorIllumina:
             read_based_features = [feature + suffix for feature in self.features_breakpoints[2:]]
             connection_features = [feature + suffix + '_' + conn for feature in self.features_connection for conn in self.bin_connections[suffix]]
             self.df_calls_annot.loc[:, read_based_features + connection_features] = self.df_calls_annot.apply(lambda x: self.calculate_read_based_features(x[values[0]], 
-                                                                                                                              x[values[1]] + values[3], 
-                                                                                                                              x[values[2]] + values[4],
-                                                                                                                              x['start'],
-                                                                                                                              x['end'],
-                                                                                                                              suffix), axis=1, result_type ='expand')
-                    
+                                                                                                                                x[values[1]] + values[3], 
+                                                                                                                                x[values[2]] + values[4],
+                                                                                                                                x['start'],
+                                                                                                                                x['end'],
+                                                                                                                                suffix), axis=1, result_type ='expand')
+                        
              
     def aggregate_results(self):
         """ Cleans up result DataFrame. """        

@@ -21,22 +21,22 @@ class Dicast:
                              'rep_Retroposon', 'rep_snRNA', 'rep_tRNA', 'rep_srpRNA', 'rep_rRNA','rep_RC', 'rep_scRNA', 'rep_RNA', 'rep_VNTR', 
                              'rep_STR', 'cpg_islands', 'centromeres', 'asmb_gaps', 'alt_haps', 'GC_content_left', 'GC_content_right']
         self.features_aln_bp = {'DEL': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
-                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_disco_tx'],
                                 'INS': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
-                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_disco_tx'],
                                 'INV': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
-                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_disco_tx'],
                                 'DUP': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
-                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_disco_tx'],
                                 'BND': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
-                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf']}
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_disco_tx']}
         self.features_aln_body = {'DEL': ['ill_cov_mean', 'ill_cov_std'],
                                   'INS': [],
                                   'INV': ['ill_cov_mean', 'ill_cov_std'],
                                   'DUP': ['ill_cov_mean', 'ill_cov_std'],
                                   'BND': []}
         self.features_aln_conn = {'DEL': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
-                                  'INS': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                  'INS': [],
                                   'INV': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
                                   'DUP': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
                                   'BND': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf']}
@@ -144,7 +144,7 @@ class Dicast:
             self.variants_predict['dicast_qual'] = np.nan
         
         
-    def save_model(self, model_filename: str):
+    def save(self, model_filename: str):
         """ Save model to file.
 
         Args:
@@ -152,11 +152,13 @@ class Dicast:
         """        
         
         # Save model
-        with open(model_filename, 'wb') as f:
-            pickle.dump(self.model, f)
+        self.model.save_model(model_filename)
+        
+        #with open(model_filename, 'wb') as f:
+        #    pickle.dump(self.model, f)
             
         # Save model metadata
-        meta_filename = model_filename.replace('.pkl', '_metadata.json')
+        meta_filename = model_filename.replace('.json', '_metadata.json')
         meta = {'date' : datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 'model_type': self.model_type,
                 'model_params': self.model_params,
@@ -175,15 +177,15 @@ class Dicast:
             f.write(json_object)
             
             
-    def load_model(self, model_filename: str):
+    def load(self, model_filename: str):
         """ Load model from file.
 
         Args:
-            model_filename (str): Filename to load the model from, must end with .pkl
+            model_filename (str): Filename to load the model from, must end with .json
         """        
         
-        with open(model_filename, 'rb') as f:
-            self.model = pickle.load(f)
+        self.model = xgb.XGBClassifier()
+        self.model.load_model(model_filename)
             
             
     def to_db(self) -> pd.DataFrame:
