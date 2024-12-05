@@ -24,7 +24,7 @@ chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8',
         'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
 
 # List of SV types currently supported by dicast
-sv_types = ['DEL', 'DUP']
+sv_types = ['DEL', 'DUP', 'INS', 'INV']
 
 
 def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot_filename: str, chrom: str, sv_type: str, sample: str):
@@ -197,18 +197,27 @@ if __name__ == '__main__':
         df.to_csv(f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.annot.tsv', sep='\t', index=False, na_rep='NA')
         
         logging.info('# Variant Prediction')
+        variant_features_filename = f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.annot.tsv'
         dicast_dfs = []
         for sv_type in sv_types:
             
-            variant_features_filename = f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.annot.tsv'
-            model_filename = f'{arguments.models}/dicast_{sv_type}.pkl'
-            
-            dicast = Dicast(sv_type)
-            dicast.load_from_csv(variant_features_filename)
-            dicast.impute_missing_values()
-            dicast.load_model(model_filename)
-            dicast.predict()
-            dicast_dfs.append(dicast.to_df())
+            if sv_type != 'INV':
+                
+                model_filename = f'{arguments.models}/dicast_{sv_type}.json'
+                dicast = Dicast(sv_type)
+                dicast.load_from_csv(variant_features_filename)
+                dicast.impute_missing_values()
+                dicast.load(model_filename)
+                dicast.predict()
+                dicast_dfs.append(dicast.to_df())
+                
+            else:
+                
+                dicast = Dicast(sv_type)
+                dicast.load_from_csv(variant_features_filename)
+                dicast.impute_missing_values()
+                dicast.score_inversions()
+                dicast_dfs.append(dicast.to_df())
             
         dicast_df = pd.concat(dicast_dfs, ignore_index=True)
         dicast_df.to_csv(f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.dicast.tsv', sep='\t', index=False, na_rep='NA')

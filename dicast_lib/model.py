@@ -142,6 +142,37 @@ class Dicast:
             self.variants_predict['dicast_qual'] = np.round(self.model.predict_proba(X)[:, 1], 3)
         else:
             self.variants_predict['dicast_qual'] = np.nan
+            
+            
+    def score_inversions(self, chroms: list=[]):
+        
+        self.chroms_predict = chroms
+        
+        # Subset variants to chromosomes used for prediction
+        if len(self.chroms_predict) > 0:
+            self.variants_predict = self.variants[self.variants['chrom'].isin(self.chroms_predict)].copy().reset_index(drop=True)
+        else:
+            self.variants_predict = self.variants.copy()
+            
+        # Predict
+        if self.variants_predict.shape[0] > 0:
+            
+            columns_clipped = ['ill_clipreads_I', 'ill_clipreads_II', 'ill_clipreads_III', 'ill_clipreads_IV']
+            mask_clipped = (self.variants_predict[columns_clipped] > 0.2).sum(axis=1) >= 3 
+
+            columns_disco = ['ill_disco_ff_I', 'ill_disco_ff_II', 'ill_disco_ff_III', 'ill_disco_ff_IV', 'ill_disco_rr_I', 'ill_disco_rr_II', 'ill_disco_rr_III', 'ill_disco_rr_IV']
+            mask_disco = (self.variants_predict[columns_disco] > 0.2).sum(axis=1) >= 3
+
+            columns_cov = ['ill_cov_mean_I', 'ill_cov_mean_II', 'ill_cov_mean_III', 'ill_cov_mean_IV']
+            mask_cov = (self.variants_predict[columns_cov] <= 3.5).all(axis=1)
+
+            mask_len = (self.variants_predict['sv_len'] < 3000000)
+            
+            self.variants_predict['dicast_qual'] = 0
+            self.variants_predict.loc[mask_clipped & mask_disco & mask_cov & mask_len, 'dicast_qual'] = 1
+            
+        else:
+            self.variants_predict['dicast_qual'] = np.nan
         
         
     def save(self, model_filename: str):
