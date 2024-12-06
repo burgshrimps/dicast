@@ -161,7 +161,8 @@ class Dicast:
             mask_clipped = (self.variants_predict[columns_clipped] > 0.2).sum(axis=1) >= 3 
 
             columns_disco = ['ill_disco_ff_I', 'ill_disco_ff_II', 'ill_disco_ff_III', 'ill_disco_ff_IV', 'ill_disco_rr_I', 'ill_disco_rr_II', 'ill_disco_rr_III', 'ill_disco_rr_IV']
-            mask_disco = (self.variants_predict[columns_disco] > 0.2).sum(axis=1) >= 3
+            mask_disco_relax = (self.variants_predict[columns_disco] > 0.1).sum(axis=1) >= 3
+            mask_disco_strict = (self.variants_predict[columns_disco] > 0.2).sum(axis=1) >= 2
 
             columns_cov = ['ill_cov_mean_I', 'ill_cov_mean_II', 'ill_cov_mean_III', 'ill_cov_mean_IV']
             mask_cov = (self.variants_predict[columns_cov] <= 3.5).all(axis=1)
@@ -169,7 +170,7 @@ class Dicast:
             mask_len = (self.variants_predict['sv_len'] < 3000000)
             
             self.variants_predict['dicast_qual'] = 0
-            self.variants_predict.loc[mask_clipped & mask_disco & mask_cov & mask_len, 'dicast_qual'] = 1
+            self.variants_predict.loc[mask_clipped & mask_disco_relax & mask_disco_strict & mask_cov & mask_len, 'dicast_qual'] = 1
             
         else:
             self.variants_predict['dicast_qual'] = np.nan
