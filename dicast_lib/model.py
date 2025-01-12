@@ -174,6 +174,45 @@ class Dicast:
             
         else:
             self.variants_predict['dicast_qual'] = np.nan
+            
+            
+    def score_translocations(self, chroms: list=[]):
+        
+        self.chroms_predict = chroms
+        
+        # Subset variants to chromosomes used for prediction
+        if len(self.chroms_predict) > 0:
+            self.variants_predict = self.variants[self.variants['chrom'].isin(self.chroms_predict)].copy().reset_index(drop=True)
+        else:
+            self.variants_predict = self.variants.copy()
+            
+        # Predict
+        if self.variants_predict.shape[0] > 0:
+            
+            columns_clipped = ['ill_clipreads_I', 'ill_clipreads_II', 'ill_clipreads_III', 'ill_clipreads_IV']
+            mask_clipped = (self.variants_predict[columns_clipped] > 0.2).sum(axis=1) >= 2
+            
+            columns_cov = ['ill_cov_mean_I', 'ill_cov_mean_II', 'ill_cov_mean_III', 'ill_cov_mean_IV']
+            mask_cov = (self.variants_predict[columns_cov] <= 3).all(axis=1)
+            
+            columns_disco_inv = ['ill_disco_ff_I', 'ill_disco_ff_II', 'ill_disco_ff_III', 'ill_disco_ff_IV', 'ill_disco_rr_I', 'ill_disco_rr_II', 'ill_disco_rr_III', 'ill_disco_rr_IV']
+            columns_disco_dup = ['ill_disco_rf_I', 'ill_disco_rf_II', 'ill_disco_rf_III', 'ill_disco_rf_IV']
+            columns_disco_tra = ['ill_disco_tx_I', 'ill_disco_tx_II', 'ill_disco_tx_III', 'ill_disco_tx_IV']
+            mask_disco_inv = (self.variants_predict[columns_disco_inv] > 0.2).sum(axis=1) >= 2
+            mask_disco_dup = (self.variants_predict[columns_disco_dup] > 0.3).sum(axis=1) >= 2
+            mask_disco_tra = (self.variants_predict[columns_disco_tra] > 0.3).sum(axis=1) >= 2
+            
+            columns_mapq = ['ill_mapq_mean_I', 'ill_mapq_mean_II', 'ill_mapq_mean_III', 'ill_mapq_mean_IV']
+            mask_mapq = (self.variants_predict[columns_mapq] >= -0.5).all(axis=1)
+            
+            columns_split = ['ill_splitreads_I', 'ill_splitreads_II', 'ill_splitreads_III', 'ill_splitreads_IV']
+            mask_split = (self.variants_predict[columns_split] > 0.1).sum(axis=1) >= 2
+            
+            self.variants_predict['dicast_qual'] = 0
+            self.variants_predict.loc[mask_clipped & mask_cov & (mask_disco_inv | mask_disco_dup | mask_disco_tra) & mask_mapq & mask_split, 'dicast_qual'] = 1
+            
+        else:
+            self.variants_predict['dicast_qual'] = np.nan
         
         
     def save(self, model_filename: str):
