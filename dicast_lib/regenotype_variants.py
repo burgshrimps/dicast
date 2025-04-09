@@ -76,7 +76,7 @@ class VariantRegenotyping:
             vcf_file = self.samples_files[sample]['vcf']
 
             if os.path.exists(vcf_file):
-                vcf = pysam.VariantFile(vcf_file)
+                vcf = pysam.VariantFile(vcf_file, "r")
             else:
                 # throw error
                 raise ValueError('VCF file does not exist.')
@@ -85,17 +85,17 @@ class VariantRegenotyping:
             for rec in vcf.fetch():
                 self.records_samples[f"{rec.chrom}_{rec.pos}_{rec.stop}_{rec.info['SVTYPE']}"] = rec
         
-    
+            vcf.close()
 
     def get_missing_varaints_based_on_cohort(self):
         """ get the missing variants based on the cohort.
         """        
         missing_variants_dict = {'id':[], 'ORIGIN_ID':[], 'sv_type':[], 'CALLER':[], 'NUM_SUPP_CALLERS':[], 'end':[], 'start':[],'chrom':[],'chrom_2':[], 'sv_len':[], 'SV_SUBTYPE':[], 'CALLER_Q':[], 'qual':[], 'SUPP_SAMPLES':[], 'SUPP_SAMPLES_GT':[], 'COHORT_AC':[], 'GT':[], 'sv_len':[], 'sample':[], 'cohort':[], 'technology':[], 'caller':[], 'reference':[]} # 'filter':[]
-        self.gt_dict = {'(0, 0)': '0/0', '(0, 1)': '0/1', '(1, 1)': '1/1', '(1, 0)': '1/0' , '(1,)': '1', '(0,)': '0', '(None, 1)' : './1', '(None, 0)': './0' , '(None, None)': './.'}
-
+        
         for region in self.records_samples.keys():
-            record = self.records_samples[region]    
-            sup_samples = record.info['SUPP_SAMPLES'].split('|')
+            record = self.records_samples[region]
+            sup_samples = record.info['SUPP_SAMPLES']
+
             # get the samples that are not in the supp_samples
             missing_samples = list(set(self.samples) - set(sup_samples))
             current_sample = record.info['SAMPLE_ID']
@@ -132,7 +132,18 @@ class VariantRegenotyping:
                 missing_variants_dict['SUPP_SAMPLES'].append(record.info['SUPP_SAMPLES'])
                 missing_variants_dict['SUPP_SAMPLES_GT'].append(record.info['SUPP_SAMPLES_GT'])
                 missing_variants_dict['COHORT_AC'].append(record.info['COHORT_AC'])
-                missing_variants_dict['GT'].append(self.gt_dict[str(record.samples[current_sample]['GT'])])
+                # check if the variant is phased 
+                gt1 = str(record.samples[current_sample]['GT'][0])
+                gt2 = str(record.samples[current_sample]['GT'][1])
+                if gt1 == None:
+                    gt1 = '.'
+                if gt2 == None:
+                    gt2 = '.'
+                if record.samples[current_sample].phased:
+                    missing_variants_dict['GT'].append(str(gt1) + '|' + str(gt2))
+                else:
+                    missing_variants_dict['GT'].append(str(record.samples[current_sample]['GT'][0]) + '/' + str(record.samples[current_sample]['GT'][1]))
+
                 missing_variants_dict['id'].append(f"{record.chrom}_{record.pos}_{record.stop}_{record.info['SVTYPE']}")
 
         self.df_variants = pd.DataFrame(missing_variants_dict)
@@ -172,14 +183,17 @@ class VariantRegenotyping:
         # convert the dicast_qual to string
         self.df_variants_regenotyped['dicast_qual'] = self.df_variants_regenotyped['dicast_qual'].astype(str)
 
+
         # group the df_variants to get the samples that don't have the variant in one row
-        self.df_variants_regenotyped  = self.df_variants_regenotyped .groupby(['id', 'sv_len',  'ORIGIN_ID', 'NUM_SUPP_CALLERS', 'SV_SUBTYPE' , 'SUPP_SAMPLES', 'SUPP_SAMPLES_GT', 'COHORT_AC','CALLER_Q','sv_type']).agg({'sample': '|'.join, 'dicast_qual': '|'.join}).reset_index()
+        self.df_variants_regenotyped  = self.df_variants_regenotyped.groupby(['id', 'sv_len',  'ORIGIN_ID', 'NUM_SUPP_CALLERS', 'SV_SUBTYPE' , 'SUPP_SAMPLES', 'SUPP_SAMPLES_GT', 'COHORT_AC','CALLER_Q','sv_type']).agg({'sample': ','.join, 'dicast_qual': '|'.join}).reset_index()
 
         # rename the sample column to SUPP_SAMPLES_REGENOTYPED
+
         self.df_variants_regenotyped.rename(columns={'sample': 'SUPP_SAMPLES_REGENOTYPED'}, inplace=True)
 
+
         # most occuring genotype
-        self.df_variants_regenotyped['genotype'] = self.df_variants_regenotyped['SUPP_SAMPLES_GT'].apply(lambda x: max(set(x.split('|')), key = x.split('|').count))
+        self.df_variants_regenotyped['genotype'] = self.df_variants_regenotyped['SUPP_SAMPLES_GT'].apply(lambda x: max(set(x), key = x.count))
 
         logging.info(f"# Number of regenotyped variants: {self.df_variants_regenotyped.shape[0]}")
         logging.info(f"# Number of regenotyped DEL variants: {self.df_variants_regenotyped[self.df_variants_regenotyped['sv_type'] == 'DEL'].shape[0]}")
@@ -227,11 +241,15 @@ class VariantRegenotyping:
         new_record.info['SVLEN'] = row['sv_len']
         new_record.info['SV_SUBTYPE'] = row['SV_SUBTYPE']
         new_record.info['CALLER_Q'] = dicast_qual
-        new_record.info['SUPP_SAMPLES'] = f"{row['SUPP_SAMPLES']}|{'|'.join(new_samples_to_add)}"
-        new_record.info['SUPP_SAMPLES_GT'] = f"{row['SUPP_SAMPLES_GT']}|{additional_gt}"
+        new_record.info['SUPP_SAMPLES'] = f"{','.join(list(row['SUPP_SAMPLES']))},{','.join(new_samples_to_add)}"
+        new_record.info['SUPP_SAMPLES_GT'] = f"{','.join(list(row['SUPP_SAMPLES_GT']))},{additional_gt}"
         new_record.info['COHORT_AC'] = int(row['COHORT_AC']) + n_new_samples
-        
-        gt_values = row['genotype'].split('/')
+        for gt in row['SUPP_SAMPLES_GT']:
+            if '/' in gt:
+                gt_values = gt.split('/')
+            elif '|' in gt:
+                gt_values = gt.split('|')
+   
         new_record.samples[0]['GT'] = (
             int(gt_values[0]) if gt_values[0] != '.' else None, 
             int(gt_values[1]) if gt_values[1] != '.' else None
@@ -253,6 +271,7 @@ class VariantRegenotyping:
             vcf_in = pysam.VariantFile(vcf_file, "r")
             for rec in vcf_in.fetch():
                 self.vcf_records[sample][f"{rec.chrom}_{rec.pos}_{rec.stop}_{rec.info['SVTYPE']}"] = rec
+            vcf_in.close()
 
     def update_variants_and_correct_ac(self):
         """
@@ -270,9 +289,8 @@ class VariantRegenotyping:
 
         # iterate over the regenotyped variants and update the supp_samples and COHORT_AC
         for _, row in self.df_variants_regenotyped.iterrows():
-
             # samples that have the new variant (these variants have a dicast_qual > 0.4) eg. HG002|HG003
-            new_samples_to_add = row['SUPP_SAMPLES_REGENOTYPED'].split('|')
+            new_samples_to_add = row['SUPP_SAMPLES_REGENOTYPED'].split(',')
 
             # corresponding dicast_qual for the new variants for each sample ex. 0.5|0.6 
             dicast_quals_to_add = row['dicast_qual'].split('|')
@@ -287,13 +305,14 @@ class VariantRegenotyping:
             chrom, start, end, sv_type = var_id.split('_')
 
             # gt to add to the supp_samples_gt info field
-            additional_gt = '|'.join([row['genotype']] * n_new_samples)
+            additional_gt = ','.join([row['genotype']] * n_new_samples)
+
             for sample in self.samples:
                 # Update existing variant with new genotyping information from other samples
                 if var_id in self.vcf_records[sample]: 
                     record = self.vcf_records[sample][var_id]
-                    record.info['SUPP_SAMPLES'] += '|' + row['SUPP_SAMPLES_REGENOTYPED']
-                    record.info['SUPP_SAMPLES_GT'] += '|' + additional_gt
+                    record.info['SUPP_SAMPLES'] = ','.join(list(record.info['SUPP_SAMPLES'])) + "," +  row['SUPP_SAMPLES_REGENOTYPED']
+                    record.info['SUPP_SAMPLES_GT'] = ','.join(list(tuple(record.info['SUPP_SAMPLES_GT']))) + "," +  additional_gt
                     record.info['COHORT_AC'] += n_new_samples
                     record.info['NUM_SUPP_CALLERS'] += 1
                 # Add new variant to the VCF file 
@@ -319,7 +338,7 @@ class VariantRegenotyping:
             
             vcf_file_header = pysam.VariantFile(vcf_file, "r").header
 
-            out_file  = vcf_file.replace('.vcf.gz', '.regenotyped.vcf.gz')
+            out_file  = vcf_file.replace('.vcf', '.regenotyped.vcf')
             vcf_out = pysam.VariantFile(out_file, "w", header=vcf_file_header)
 
             for _, rec in self.vcf_records[sample].items():

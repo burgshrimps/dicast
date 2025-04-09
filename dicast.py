@@ -34,8 +34,7 @@ def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot
     """ Collects alignment features for a given chromosome. 
     
     param chrom: Chromosome name """
-
-    AAI = AlignmentAnnotatorIllumina(bam_filename, chrom, sv_type, sample, exome_regions)
+    AAI = AlignmentAnnotatorIllumina(bam_filename, chrom, sv_type, sample)
     AAI.load_from_csv(variant_filename)
     AAI.calculate_coverage_baseline()
     AAI.calculate_insertsize_baseline()
@@ -53,7 +52,8 @@ def combine_feature_files(sample: str, ref: str, workdir: str):
     df_ref = pd.read_csv(f'{workdir}/{sample}_{ref}.SVs.ref.tsv', sep='\t', low_memory=False)
     
     filenames_aln_ill = glob(f'{workdir}/{sample}_{ref}.SVs.aln.ill.*.*.tsv')
-    df_aln_ill = pd.concat([pd.read_csv(f, sep='\t') for f in filenames_aln_ill if f not f.empty], ignore_index=True)
+    
+    df_aln_ill = pd.concat([pd.read_csv(f, sep='\t') for f in filenames_aln_ill], ignore_index=True)
     
     df = df_raw.merge(df_ref.drop(['sample', 'sv_type', 'chrom', 'chrom_2', 'start', 'end', 'cohort', 'technology', 'caller', 'reference'], axis=1), on='id', how='inner')
     df = df.merge(df_aln_ill.drop(['sample', 'sv_type', 'chrom', 'chrom_2', 'start', 'end', 'sv_len', 'cohort', 'technology', 'caller', 'reference'], axis=1), on='id', how='inner')
@@ -208,8 +208,8 @@ if __name__ == '__main__':
         logging.info(f'BAM: {arguments.bam}')
         logging.info(f'THREADS: {arguments.threads}')
         logging.info(f'MODELS: {arguments.models}')
-        logging.info(f'SV CALLERS: {", ".join([caller for caller, vcf in arguments.vcfs])}')
-        logging.info(f'VCFs: {", ".join([vcf for caller, vcf in arguments.vcfs])}')
+        logging.info(f'SV CALLERS: {", ".join([caller for caller, _ in arguments.vcfs])}')
+        logging.info(f'VCFs: {", ".join([vcf for _, vcf in arguments.vcfs])}')
         if arguments.exome:
                 logging.info(f'Exome Target Regions: {arguments.exome_regions}')
         print('')
@@ -285,10 +285,10 @@ if __name__ == '__main__':
             print('')
     
             # restrict feature extration to a single chromosome if specified
-            # if arguments.chrom == 'all':
-            #     chroms = chroms
-            # else:
-            #     chroms = [arguments.chrom]
+            if arguments.chrom == 'all':
+                chroms = chroms
+            else:
+                chroms = [arguments.chrom]
         
 
             logging.info('# Create Variant DataFrame')
@@ -310,12 +310,12 @@ if __name__ == '__main__':
                 target_regions = pd.read_csv(arguments.exome_regions, sep='\t', names=['chr','start','end'], dtype={'chr':str,'start':int,'stop':int},index_col=False)
 
             if arguments.technology == 'ill':
-                logging.info('# Collect Alignment Features for missing variants')
-                bam_dict = {sample: VP.samples_files[sample]['bam'] for sample in VP.df_variants['sample'].unique()}
+               logging.info('# Collect Alignment Features for missing variants')
+               bam_dict = {sample: VP.samples_files[sample]['bam'] for sample in VP.df_variants['sample'].unique()}
 
-                collect_samples_aln_feat(chroms, sv_types, arguments, bam_dict, target_regions if arguments.exome else None)
+               collect_samples_aln_feat(chroms, sv_types, arguments, bam_dict) # target_regions if arguments.exome else None
 
-            # logging.info('# Combination Output Files')
+            logging.info('# Combination Output Files')
             for sample in VP.samples:
                 df = combine_feature_files(sample, arguments.ref, arguments.workdir)
                 df = VP.add_dicast_cols(df)
