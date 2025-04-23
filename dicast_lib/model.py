@@ -4,18 +4,20 @@ import pickle
 import json
 import datetime
 import numpy as np
+import shap
+import yaml
 
 
 class Dicast:
     """ Structural variant detection from short-read sequencing data. """
 
-    def __init__(self, sv_type: str):
+    def __init__(self, sv_type: str, feature_config_file: str=None):
         """ Initialize Dicast object. """
         
         self.sv_type = sv_type
         self.cov_thr = 5 # Log2 threshold were feature collection was aborted
         
-        # Determine set of features to use
+        # Determine complete set of features
         self.features_var = ['sv_len']
         self.features_ref = ['rep_LINE', 'rep_SINE', 'rep_LTR', 'rep_DNA', 'rep_Simple_repeat', 'rep_Satellite', 'rep_Low_complexity',
                              'rep_Retroposon', 'rep_snRNA', 'rep_tRNA', 'rep_srpRNA', 'rep_rRNA','rep_RC', 'rep_scRNA', 'rep_RNA', 'rep_VNTR', 
@@ -41,6 +43,52 @@ class Dicast:
                                   'DUP': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
                                   'BND': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf']}
         
+        # Load feature config
+        if feature_config_file is not None:
+            with open(feature_config_file, 'r') as f:
+                self.feature_config = yaml.safe_load(f)
+        
+        # Filter and create variant features
+        if self.feature_config is not None:
+            filtered_features = []
+            for feature in self.features_var:
+                if self.feature_config['variant'][feature] == 1:
+                    filtered_features.append(feature)
+            self.features_var = filtered_features
+
+        # Filter and create reference features
+        if self.feature_config is not None:
+            filtered_features = []
+            for feature in self.features_ref:
+                if self.feature_config['reference'][feature] == 1:
+                    filtered_features.append(feature)
+            self.features_ref = filtered_features
+
+        # Filter alignment features
+        if self.feature_config is not None:
+            filtered_features = []
+            for feature in self.features_aln_bp[self.sv_type]:
+                if self.feature_config['alignment'][feature] == 1:
+                    filtered_features.append(feature)
+            self.features_aln_bp[self.sv_type] = filtered_features
+
+        # Filter alignment body features
+        if self.feature_config is not None:
+            filtered_features = []
+            for feature in self.features_aln_body[self.sv_type]:
+                if self.feature_config['alignment_body'][feature] == 1:
+                    filtered_features.append(feature)
+            self.features_aln_body[self.sv_type] = filtered_features
+
+        # Filter alignment connection features
+        if self.feature_config is not None:
+            filtered_features = []
+            for feature in self.features_aln_conn[self.sv_type]:
+                if self.feature_config['alignment_conn'][feature] == 1:
+                    filtered_features.append(feature)
+            self.features_aln_conn[self.sv_type] = filtered_features
+                
+        # Create alignment features
         suffices_bp = ['I', 'II'] if self.sv_type == 'INS' else ['I', 'II', 'III', 'IV'] 
         suffices_body = [] if self.sv_type == 'INS' or self.sv_type == 'BND' else ['IIa', 'IIb', 'IIIb', 'IIIa']
         bin_connections = {'I' : ['II', 'III', 'IV'],
@@ -54,6 +102,8 @@ class Dicast:
             for suffix in suffices_bp:
                 for suffix2 in bin_connections[suffix]:
                     self.features_aln.append(feature + '_' + suffix + '_' + suffix2)
+
+        # Create complete set of features
         self.features = self.features_var + self.features_ref + self.features_aln
         
     
@@ -255,8 +305,12 @@ class Dicast:
             model_filename (str): Filename to load the model from, must end with .json
         """        
         
+        #self.model = xgb.XGBClassifier()
+        #self.model.load_model(model_filename)
+
         self.model = xgb.XGBClassifier()
-        self.model.load_model(model_filename)
+        self.model._Booster = xgb.Booster()
+        self.model._Booster.load_model(model_filename)
             
             
     def to_db(self) -> pd.DataFrame:
@@ -282,3 +336,48 @@ class Dicast:
         columns_for_export = ['id', 'cohort', 'sample', 'reference', 'technology', 'caller', 'sv_type', 
                               'chrom', 'chrom_2', 'start', 'end', 'sv_len', 'filter', 'qual', 'dicast_qual', 'genotype']
         return self.variants_predict[columns_for_export]
+    
+
+    def get_feature_importance(self) -> pd.DataFrame:
+        """Get global feature importance from the XGBoost model.
+        
+        Returns:
+            pd.DataFrame: DataFrame containing feature names and their importance scores
+        """
+        importance_dict = {
+            'feature': self.features,
+            'importance': self.model.feature_importances_
+        }
+        importance_df = pd.DataFrame(importance_dict)
+        return importance_df.sort_values('importance', ascending=False)
+
+    def get_prediction_explanation(self, variant_idx: int = None) -> dict:
+        """Get SHAP values explaining a specific prediction or all predictions.
+        
+        Args:
+            variant_idx (int, optional): Index of variant to explain. 
+                If None, returns explanations for all variants.
+        
+        Returns:
+            dict: Dictionary containing feature contributions
+        """
+        
+        X = self.variants_predict[self.features]
+        explainer = shap.TreeExplainer(self.model)
+        shap_values = explainer.shap_values(X)
+        
+        if variant_idx is not None:
+            # Return explanation for specific variant
+            contributions = dict(zip(self.features, shap_values[variant_idx]))
+            return {
+                'base_value': explainer.expected_value,
+                'prediction': self.variants_predict.iloc[variant_idx]['dicast_qual'],
+                'feature_contributions': dict(sorted(contributions.items(), key=lambda x: abs(x[1]), reverse=True))
+            }
+        else:
+            # Return all explanations
+            return {
+                'base_value': explainer.expected_value,
+                'shap_values': shap_values,
+                'features': self.features
+            }
