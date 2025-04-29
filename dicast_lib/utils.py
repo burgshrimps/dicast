@@ -254,3 +254,140 @@ def caller_vcf_to_dataframe(vcf: pysam.VariantFile, cohort: str, sample: str, re
     df['reference'] = reference
 
     return df
+
+
+def sample_vcf_to_dataframe(vcf: pysam.VariantFile, cohort: str, sample: str, reference: str, technology: str, canonical_chroms: list, check_genotype: bool=False) -> pd.DataFrame:
+    """ Converts VCF file to pandas dataframe.
+
+    Args:
+        vcf (pysam.VariantFile): VCF object
+        cohort (str): Cohort name
+        sample (str): Sample name
+        reference (str): Reference genome name
+        technology (str): Sequencing technology name
+        caller (str): SV caller name
+        canonical_chroms (list): List of canonical chromosomes
+        check_genotype (bool, optional): If true only keep records that are present in the sample being analyzed. Defaults to False.
+
+    Returns:
+        pd.DataFrame: _description_
+    """    
+    
+    sv_types = ['DEL', 'INS', 'INV', 'DUP', 'BND']
+    vcf_dict = {'id': [], 'sv_type': [], 'chrom': [], 'start' : [], 'chrom_2' : [], 'end': [], 
+                'sv_len' : [], 'filter': [], 'qual' : [], 'genotype': [], 'caller': [],
+                'cohort_ac' : [], 'cohort_samples': [], 'cohort_samples_gt': []}
+    
+    for rec in vcf.fetch():
+
+        # Check genotype of sample and only keep SVs that are present in sample
+        if check_genotype:
+            if 1 in rec.samples[sample]['GT']:
+                pass
+            else:
+                continue
+            
+        # Check if SV is on canonical chromosome
+        if not rec.chrom in canonical_chroms:
+            continue
+        
+         # Check whether SV type is in list of SV types to keep
+        if not rec.info['SVTYPE'] in sv_types:
+            continue
+        else:
+            sv_type = rec.info['SVTYPE']
+            
+        # Information that is always present
+        vcf_dict['id'].append(rec.id)
+        vcf_dict['chrom'].append(rec.chrom)
+        vcf_dict['filter'].append(', '.join(rec.filter.keys()))
+        vcf_dict['qual'].append(rec.qual)
+        vcf_dict['sv_type'].append(sv_type)
+        vcf_dict['start'].append(rec.start + 1)
+        vcf_dict['genotype'].append(rec.samples[sample]['GT'])
+        callers = [caller.lower() for caller in rec.info['CALLER'].split('|')]
+        vcf_dict['caller'].append(', '.join(callers))
+        vcf_dict['cohort_ac'].append(int(rec.info['COHORT_AC']))
+        cohort_samples = rec.info['SUPP_SAMPLES']
+        vcf_dict['cohort_samples'].append(', '.join(cohort_samples))
+        cohort_samples_gt = rec.info['SUPP_SAMPLES_GT']
+        vcf_dict['cohort_samples_gt'].append(', '.join(cohort_samples_gt))
+        # Deletions
+        if sv_type == 'DEL':
+            vcf_dict['chrom_2'].append(np.nan)
+            vcf_dict['end'].append(rec.stop)
+            
+            if 'SVLEN' in rec.info.keys():
+                try:
+                    # Sometimes SVLEN is stored as a tuple
+                    vcf_dict['sv_len'].append(rec.info['SVLEN'][0])
+                except TypeError:
+                    vcf_dict['sv_len'].append(rec.info['SVLEN'])
+            else:
+                vcf_dict['sv_len'].append(np.nan)
+
+        # Insertions
+        elif sv_type == 'INS':
+            vcf_dict['chrom_2'].append(np.nan)
+            vcf_dict['end'].append(rec.stop)
+                
+            if 'SVLEN' in rec.info.keys():
+                try:
+                    # Sometimes SVLEN is stored as a tuple
+                    vcf_dict['sv_len'].append(rec.info['SVLEN'][0])
+                except TypeError:
+                    vcf_dict['sv_len'].append(rec.info['SVLEN'])
+            else:
+                vcf_dict['sv_len'].append(np.nan)
+
+        # Inversions
+        elif sv_type == 'INV':
+            vcf_dict['chrom_2'].append(np.nan)
+            vcf_dict['end'].append(rec.stop)
+            
+            if 'SVLEN' in rec.info.keys():
+                try:
+                    # Sometimes SVLEN is stored as a tuple
+                    vcf_dict['sv_len'].append(rec.info['SVLEN'][0])
+                except TypeError:
+                    vcf_dict['sv_len'].append(rec.info['SVLEN'])
+            else:
+                vcf_dict['sv_len'].append(np.nan)
+
+        # Duplications
+        elif sv_type == 'DUP':
+            vcf_dict['chrom_2'].append(np.nan)
+            vcf_dict['end'].append(rec.stop)
+            
+            if 'SVLEN' in rec.info.keys():
+                try:
+                    # Sometimes SVLEN is stored as a tuple
+                    vcf_dict['sv_len'].append(rec.info['SVLEN'][0])
+                except TypeError:
+                    vcf_dict['sv_len'].append(rec.info['SVLEN'])
+            else:
+                vcf_dict['sv_len'].append(np.nan)
+
+        # Breakends (Translocations)
+        elif sv_type == 'BND':
+            try:
+                vcf_dict['chrom_2'].append(re.search(r'chr.*:', rec.alts[0]).group(0)[:-1])
+                vcf_dict['end'].append(re.search(r':[0-9]*', rec.alts[0]).group(0)[1:])
+            except AttributeError:
+                vcf_dict['chrom_2'].append(rec.chrom)
+                if rec.stop == rec.start + 1:
+                    vcf_dict['end'].append(rec.start + 2)
+                else:
+                    vcf_dict['end'].append(rec.stop)
+            vcf_dict['sv_len'].append(np.nan)
+
+        else:
+            print('SV type not supported: ' + rec.info['SVTYPE'])
+            
+    df = pd.DataFrame(vcf_dict)
+    df['cohort'] = cohort
+    df['sample'] = sample
+    df['technology'] = technology
+    df['reference'] = reference
+
+    return df

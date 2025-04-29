@@ -4,13 +4,13 @@ import numpy as np
 import re
 import os
 
-from dicast_lib.utils import replace_filename, caller_vcf_to_dataframe
+from dicast_lib.utils import replace_filename, caller_vcf_to_dataframe, sample_vcf_to_dataframe
 
 
 class VariantPrep:
     """ Class to prepare raw variant calls for feature extraction. """
 
-    def __init__(self, cohort: str, sample: str, ref: str, workdir: str, technology: str, vcfs: list, chroms: list, chrom_sizes: str, sv_types: list):
+    def __init__(self, cohort: str, sample: str, ref: str, workdir: str, technology: str, vcfs: list, chroms: list, chrom_sizes: str, sv_types: list, mode: str='single'):
         """ Constructor for VariantPrep class.
 
         Args:
@@ -31,6 +31,7 @@ class VariantPrep:
         self.workdir = workdir
         self.vcfs = vcfs
         self.sv_types = sv_types
+        self.mode = mode
 
         # Auxiallary files for preparation
         self.chrom_sizes = pd.read_csv(chrom_sizes, sep='\t', header=None, 
@@ -44,26 +45,40 @@ class VariantPrep:
         """ Reads all VCF files and stores them in pandas dataframe.
         """        
 
-        vcf_dfs = []
-        for caller, vcf_file in self.vcfs:
-            
-            # Open VCF file
-            save = pysam.set_verbosity(0)
-            if os.path.exists(vcf_file):
-                vcf = pysam.VariantFile(vcf_file)
-            else:
-                # Smoove appears in lumpy filenames
-                vcf = pysam.VariantFile(vcf_file.replace('-', '_'))
-            pysam.set_verbosity(save)
-            
-            # Parse VCF file
-            df = caller_vcf_to_dataframe(vcf, self.cohort, self.sample, self.ref, self.technology, caller, self.chroms)
-            vcf_dfs.append(df)
-            
-        # Merge all VCF files
-        self.df_variants = pd.concat(vcf_dfs, ignore_index=True)
-            
+        if self.mode == 'single':
+            vcf_dfs = []
+            for caller, vcf_file in self.vcfs:
+                
+                # Open VCF file
+                save = pysam.set_verbosity(0)
+                if os.path.exists(vcf_file):
+                    vcf = pysam.VariantFile(vcf_file)
+                else:
+                    # Smoove appears in lumpy filenames
+                    vcf = pysam.VariantFile(vcf_file.replace('-', '_'))
+                pysam.set_verbosity(save)
+                
+                # Parse VCF file
+                df = caller_vcf_to_dataframe(vcf, self.cohort, self.sample, self.ref, self.technology, caller, self.chroms)
+                vcf_dfs.append(df)
+                
+            # Merge all VCF files
+            self.df_variants = pd.concat(vcf_dfs, ignore_index=True)
 
+        elif self.mode == 'cohort':
+            # In cohort mode there is only one VCF file per sample and self.vcfs only contains one sample
+            for sample, vcf_file in self.vcfs.items():
+
+                # Open VCF file
+                save = pysam.set_verbosity(0)
+                vcf = pysam.VariantFile(vcf_file)
+                pysam.set_verbosity(save)
+
+                # Parse VCF file
+                df = sample_vcf_to_dataframe(vcf, self.cohort, sample, self.ref, self.technology, self.chroms)
+                df['id'] = df['sv_type'] + '_' + df['chrom'] + '_' + df['start'].astype(str) + '_' + df['end'].astype(str) + '_' + df['sv_len'].fillna(0).astype(int).astype(str)
+                self.df_variants = df.copy()
+                
 
     def check_out_of_bounds(self, svtype: str, chrom: str, chrom_2: str, start: int, end: int, chrom_sizes: pd.DataFrame, padding: int=50) -> bool:
         """ Checks if variant is out of chromosome bounds.
@@ -103,15 +118,21 @@ class VariantPrep:
         self.df_variants = self.df_variants[self.df_variants['sv_type'].isin(self.sv_types)].copy().reset_index(drop=True)
 
 
+    def filter_variants_cohort(self, num_samples: int):
+       
+       # Filter out variants that are present in all samples
+       self.df_variants = self.df_variants[self.df_variants['cohort_ac'] < num_samples].copy().reset_index(drop=True) 
+
+       # Filter based on dicast quality
+       self.df_variants = self.df_variants[self.df_variants['qual'] >= 0.1].copy().reset_index(drop=True)
+
+
+    def get_variant_df(self):
+        return self.df_variants
+
+
     def save_variants(self):
         """ Saves variants dataframe to file. """
         
         filename = self.sample + '_' + self.ref + '.SVs.raw.tsv'
         self.df_variants.to_csv('/'.join([self.workdir, filename]), index=False, sep='\t', na_rep='NA')
-                
-
-
-    
-
-
-

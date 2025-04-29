@@ -49,7 +49,7 @@ class Dicast:
                 self.feature_config = yaml.safe_load(f)
         
         # Filter and create variant features
-        if self.feature_config is not None:
+        if feature_config_file is not None:
             filtered_features = []
             for feature in self.features_var:
                 if self.feature_config['variant'][feature] == 1:
@@ -57,7 +57,7 @@ class Dicast:
             self.features_var = filtered_features
 
         # Filter and create reference features
-        if self.feature_config is not None:
+        if feature_config_file is not None:
             filtered_features = []
             for feature in self.features_ref:
                 if self.feature_config['reference'][feature] == 1:
@@ -65,7 +65,7 @@ class Dicast:
             self.features_ref = filtered_features
 
         # Filter alignment features
-        if self.feature_config is not None:
+        if feature_config_file is not None:
             filtered_features = []
             for feature in self.features_aln_bp[self.sv_type]:
                 if self.feature_config['alignment'][feature] == 1:
@@ -73,7 +73,7 @@ class Dicast:
             self.features_aln_bp[self.sv_type] = filtered_features
 
         # Filter alignment body features
-        if self.feature_config is not None:
+        if feature_config_file is not None:
             filtered_features = []
             for feature in self.features_aln_body[self.sv_type]:
                 if self.feature_config['alignment_body'][feature] == 1:
@@ -81,7 +81,7 @@ class Dicast:
             self.features_aln_body[self.sv_type] = filtered_features
 
         # Filter alignment connection features
-        if self.feature_config is not None:
+        if feature_config_file is not None:
             filtered_features = []
             for feature in self.features_aln_conn[self.sv_type]:
                 if self.feature_config['alignment_conn'][feature] == 1:

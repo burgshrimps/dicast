@@ -19,21 +19,31 @@ from dicast_lib.collect_reference import ReferenceAnnotator
 from dicast_lib.collect_illumina import AlignmentAnnotatorIllumina
 from dicast_lib.model import Dicast
 from dicast_lib.model_exome import DicastExome
+from dicast_lib.cohort import Cohort
 
 
 # List of chromosomes to process
 chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 
-        'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 
-        'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
+          'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 
+          'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
 
 # List of SV types currently supported by dicast
 sv_types = ['DEL', 'DUP', 'INS', 'INV']
 
 
-def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot_filename: str, chrom: str, sv_type: str, sample: str,exome_regions:pd.DataFrame=None):
+def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot_filename: str, chrom: str, sv_type: str, sample: str, exome_regions: pd.DataFrame=None):
     """ Collects alignment features for a given chromosome. 
-    
-    param chrom: Chromosome name """
+
+    Args:
+        bam_filename (str): BAM file
+        variant_filename (str):  TSV file with variants to annotate
+        variant_annot_filename (str): Output TSV file with annotated variants
+        chrom (str): Chromosome name
+        sv_type (str): SV type
+        sample (str): Sample name
+        exome_regions (pd.DataFrame, optional): Exome regions. Defaults to None.
+    """    
+
     AAI = AlignmentAnnotatorIllumina(bam_filename, chrom, sv_type, sample)
     AAI.load_from_csv(variant_filename)
     AAI.calculate_coverage_baseline()
@@ -44,9 +54,17 @@ def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot
     AAI.to_csv(variant_annot_filename)
 
 
+def combine_feature_files(sample: str, ref: str, workdir: str) -> pd.DataFrame:
+    """ Combines raw, reference and alignment features into a single TSV file.
 
+    Args:
+        sample (str): Sample name
+        ref (str): Reference genome name
+        workdir (str): Working directory
 
-def combine_feature_files(sample: str, ref: str, workdir: str):
+    Returns:
+        pd.DataFrame: DataFrame with combined features
+    """    
 
     df_raw = pd.read_csv(f'{workdir}/{sample}_{ref}.SVs.raw.tsv', sep='\t', low_memory=False)
     df_ref = pd.read_csv(f'{workdir}/{sample}_{ref}.SVs.ref.tsv', sep='\t', low_memory=False)
@@ -61,35 +79,48 @@ def combine_feature_files(sample: str, ref: str, workdir: str):
     return df
 
 
-def add_info_tag_to_vcf(vcfs, arguments):
-    """Adds dicast quality to input VCFs"""
+def add_info_tag_to_vcf(arguments: argparse.Namespace):
+    """ Adds dicast quality to input VCFs.
+
+    Args:
+        arguments (argparse.Namespace): Parsed command line arguments
+    """    
+
     dicast_df = pd.read_csv(f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.dicast.tsv', sep='\t')
 
-    for caller, vcf_filename in vcfs:
-            vcf_in = vcfpy.Reader.from_path(vcf_filename)
-            vcf_in.header.add_info_line(vcfpy.OrderedDict(
-                [('ID', 'DQ'), ('Number', '1'), ('Type', 'String'),  ('Description', 'Dicast Quality Score')]))
-            vcf_filename_out = vcf_filename.replace('.vcf', '.dicast.vcf').replace('.gz', '')
-            vcf_out = vcfpy.Writer.from_path(vcf_filename_out, vcf_in.header)
+    for caller, vcf_filename in arguments.vcfs:
+        vcf_in = vcfpy.Reader.from_path(vcf_filename)
+        vcf_in.header.add_info_line(vcfpy.OrderedDict([('ID', 'DQ'), 
+                                                       ('Number', '1'), 
+                                                       ('Type', 'String'),  
+                                                       ('Description', 'Dicast Quality Score')]))
+        vcf_filename_out = vcf_filename.replace('.vcf', '.dicast.vcf').replace('.gz', '')
+        vcf_out = vcfpy.Writer.from_path(vcf_filename_out, vcf_in.header)
 
-            dicast_df_caller = dicast_df[dicast_df['caller']== caller].copy().reset_index(drop=True)
-            dicast_df_caller = dicast_df_caller[['id', 'dicast_qual']].set_index('id').T.to_dict('list')
+        dicast_df_caller = dicast_df[dicast_df['caller']== caller].copy().reset_index(drop=True)
+        dicast_df_caller = dicast_df_caller[['id', 'dicast_qual']].set_index('id').T.to_dict('list')
 
-            for rec in vcf_in:
-                if rec.ID[0] in dicast_df_caller.keys():
-                    qual_dicast = dicast_df_caller[rec.ID[0]][0]
-                else:
-                    qual_dicast = -1
+        for rec in vcf_in:
+            if rec.ID[0] in dicast_df_caller.keys():
+                qual_dicast = dicast_df_caller[rec.ID[0]][0]
+            else:
+                qual_dicast = -1
 
-                rec.INFO['DQ'] = str(qual_dicast)
-                vcf_out.write_record(rec)
-                
-            logging.info(
-                f'Added DQ tag to {caller} VCF file')
+            rec.INFO['DQ'] = str(qual_dicast)
+            vcf_out.write_record(rec)
+            
+        logging.info(
+            f'Added DQ tag to {caller} VCF file')
 
 
-def extract_reference_features(arguments,samples):
-    # Create dictionary with reference annotaiton filenames
+def extract_reference_features(arguments: argparse.Namespace, sample: str):
+    """ Extracts reference features for a given sample.
+
+    Args:
+        arguments (argparse.Namespace): Parsed command line arguments
+        sample (str): Sample name
+    """    
+    
     reference_filenames = {
             'repeats_filename' : arguments.repeats,
             'vntrs_filename' : arguments.vntrs,
@@ -101,71 +132,82 @@ def extract_reference_features(arguments,samples):
             'gc_filename' : arguments.gc
     }
     
-    for sample in samples:
-        RA = ReferenceAnnotator(reference_filenames)
-        RA.load_from_csv('/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.raw.tsv']))
-        RA.split_bnd()
-        logging.info('# Annotation Repeats')
-        RA.annotate_repeats()
-        logging.info('# Annotation VNTRs')
-        RA.annotate_vntrs()
-        logging.info('# Annotation STRs')
-        RA.annotate_strs()
-        logging.info('# Annotation CGIs')
-        RA.annotate_cpg_islands()
-        logging.info('# Annotation Centromeres')
-        RA.annotate_centromeres()
-        logging.info('# Annotation Assembly Gaps')
-        RA.annotate_asmb_gaps()
-        logging.info('# Annotation Alternative Haplotypes')
-        RA.annotate_alt_haps()
-        logging.info('# Annotation GC Content')
-        RA.annotate_gc_content()
-        logging.info('# Aggregate Results')
-        RA.aggregate_results()
-        logging.info('# Save Reference Features')
-        RA.to_csv('/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.ref.tsv']))
-
-def collect_samples_aln_feat(chroms, sv_types, arguments,bam_dict,  target_regions=None):
-    logging.info('# Collect Illumina Alignment Features')
-    parallel_input = []
-    for sample in bam_dict.keys():
-        for sv_type in sv_types:
-            for chrom in chroms:   
-                variant_filename = '/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.raw.tsv'])
-                variant_annot_filename = '/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.aln.ill.' + chrom + '.' + sv_type + '.tsv'])
-                if arguments.exome:
-                    parallel_input.append(
-                                (bam_dict[sample], variant_filename, variant_annot_filename, chrom, sv_type, sample, target_regions.loc[target_regions['chr']==chrom].copy()))
-                else:
-                    parallel_input.append(
-                                (bam_dict[sample], variant_filename, variant_annot_filename, chrom, sv_type, sample))
-                        
-            
-    Parallel(n_jobs=arguments.threads)(delayed(collect_aln_features)(*args) for args in parallel_input)
+    RA = ReferenceAnnotator(reference_filenames)
+    RA.load_from_csv('/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.raw.tsv']))
+    RA.split_bnd()
+    logging.info('# Annotation Repeats')
+    RA.annotate_repeats()
+    logging.info('# Annotation VNTRs')
+    RA.annotate_vntrs()
+    logging.info('# Annotation STRs')
+    RA.annotate_strs()
+    logging.info('# Annotation CGIs')
+    RA.annotate_cpg_islands()
+    logging.info('# Annotation Centromeres')
+    RA.annotate_centromeres()
+    logging.info('# Annotation Assembly Gaps')
+    RA.annotate_asmb_gaps()
+    logging.info('# Annotation Alternative Haplotypes')
+    RA.annotate_alt_haps()
+    logging.info('# Annotation GC Content')
+    RA.annotate_gc_content()
+    logging.info('# Aggregate Results')
+    RA.aggregate_results()
+    logging.info('# Save Reference Features')
+    RA.to_csv('/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.ref.tsv']))
 
 
-def predict_variants(sv_types, arguments,samples):
-    for sample in samples:
-        variant_features_filename = f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.annot.tsv'
-        dicast_dfs = []
-        for sv_type in sv_types:
-            if sv_type != 'INV':
-                model_filename = f'{arguments.models}/dicast_{sv_type}.json'
-                dicast = Dicast(sv_type)
-                dicast.load_from_csv(variant_features_filename)
-                dicast.impute_missing_values()
-                dicast.load(model_filename)
-                dicast.predict()
-                dicast_dfs.append(dicast.to_df())   
-            else:
-                dicast = Dicast(sv_type)
-                dicast.load_from_csv(variant_features_filename)
-                dicast.impute_missing_values()
-                dicast.score_inversions()
-                dicast_dfs.append(dicast.to_df())
-        dicast_df = pd.concat([df for df in dicast_dfs if not df.empty], ignore_index=True)
-        dicast_df.to_csv(f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.dicast.tsv', sep='\t', index=False, na_rep='NA')
+def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot_filename: str, chrom: str, sv_type: str, sample: str, exome_regions: pd.DataFrame=None):
+    """ Collects alignment features for a given chromosome. 
+
+    Args:
+        bam_filename (str): BAM file
+        variant_filename (str):  TSV file with variants to annotate
+        variant_annot_filename (str): Output TSV file with annotated variants
+        chrom (str): Chromosome name
+        sv_type (str): SV type
+        sample (str): Sample name
+        exome_regions (pd.DataFrame, optional): Exome regions. Defaults to None.
+    """    
+    
+    AAI = AlignmentAnnotatorIllumina(bam_filename, chrom, sv_type, sample)
+    AAI.load_from_csv(variant_filename)
+    AAI.calculate_coverage_baseline()
+    AAI.calculate_insertsize_baseline()
+    AAI.calculate_mapping_quality_baseline()
+    AAI.annotate_coverage()
+    AAI.annotate_read_based_features()
+    AAI.to_csv(variant_annot_filename)
+
+
+def score_variants(sv_types: list, arguments: argparse.Namespace, sample: str):
+    """ Uses dicast model to score variants.
+
+    Args:
+        sv_types (list): List of SV types
+        arguments (argparse.Namespace): Parsed command line arguments
+        sample (str): Sample name
+    """    
+
+    variant_features_filename = f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.annot.tsv'
+    dicast_dfs = []
+    for sv_type in sv_types:
+        if sv_type != 'INV':
+            model_filename = f'{arguments.models}/dicast_{sv_type}.json'
+            dicast = Dicast(sv_type)
+            dicast.load_from_csv(variant_features_filename)
+            dicast.impute_missing_values()
+            dicast.load(model_filename)
+            dicast.predict()
+            dicast_dfs.append(dicast.to_df())   
+        else:
+            dicast = Dicast(sv_type)
+            dicast.load_from_csv(variant_features_filename)
+            dicast.impute_missing_values()
+            dicast.score_inversions()
+            dicast_dfs.append(dicast.to_df())
+    dicast_df = pd.concat([df for df in dicast_dfs if not df.empty], ignore_index=True)
+    dicast_df.to_csv(f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.dicast.tsv', sep='\t', index=False, na_rep='NA')
 
 
 if __name__ == '__main__':
@@ -214,15 +256,14 @@ if __name__ == '__main__':
                 logging.info(f'Exome Target Regions: {arguments.exome_regions}')
         print('')
 
-        # restrict feature extration to a single chromosome if specified
-        # if arguments.chrom == 'all':
-        #     chroms = chroms
-        # else:
-        #     chroms = [arguments.chrom]
-    
+        # Restrict feature extraction to a single chromosome if specified
+        if arguments.chrom == 'all':
+            chroms = chroms
+        else:
+            chroms = [arguments.chrom]
         
+        # Variant Preparation
         logging.info('# Create Variant DataFrame')
-        
         VP = VariantPrep(arguments.cohort, arguments.sample, arguments.ref, arguments.workdir, 
                          arguments.technology, arguments.vcfs, chroms, arguments.fai, sv_types)
         logging.info('# Read Variants')
@@ -232,36 +273,48 @@ if __name__ == '__main__':
         logging.info('# Save Variants')
         VP.save_variants()
         
-
+        # Reference Feature Collection
         logging.info('# Collect Reference Features')
-        extract_reference_features(arguments,[arguments.sample])
+        extract_reference_features(arguments, arguments.sample)
         
-        # load target regions as pandas dataframe
+        # Alignment Feature Collection
         if arguments.exome:
-            target_regions = pd.read_csv(arguments.exome_regions, sep='\t', names=['chr','start','end'], dtype={'chr':str,'start':int,'stop':int},index_col=False)
+            logging.info('# Load Exome Target Regions')
+            target_regions = pd.read_csv(arguments.exome_regions, sep='\t', names=['chr','start','end'], dtype={'chr':str,'start':int,'stop':int}, index_col=False)
 
-        logging.info(f'# Collect Alignment Features for sample {arguments.sample}')
-        if arguments.technology == 'ill':
-            # create a dictionary of sample and bam file
-            bam_dict = {arguments.sample: arguments.bam}
-            collect_samples_aln_feat(chroms, sv_types, arguments, bam_dict, target_regions if arguments.exome else None)
+        logging.info(f'# Collect Alignment Features')
+        parallel_input = []
+        for sv_type in sv_types:
+            for chrom in chroms:   
+                variant_filename = '/'.join([arguments.workdir, arguments.sample + '_' + arguments.ref + '.SVs.raw.tsv'])
+                variant_annot_filename = '/'.join([arguments.workdir, arguments.sample + '_' + arguments.ref + '.SVs.aln.ill.' + chrom + '.' + sv_type + '.tsv'])
+                if arguments.exome:
+                    target_regions_chrom = target_regions.loc[target_regions['chr']==chrom].copy().reset_index(drop=True)
+                    parallel_input.append((arguments.bam, variant_filename, variant_annot_filename, 
+                                        chrom, sv_type, arguments.sample, target_regions_chrom))
+                else:
+                    parallel_input.append((arguments.bam, variant_filename, variant_annot_filename, 
+                                        chrom, sv_type, arguments.sample))
+        Parallel(n_jobs=arguments.threads)(delayed(collect_aln_features)(*args) for args in parallel_input)
         
+        # Combination of Raw, Reference and Alignment Features
         logging.info('# Combination Output Files')
         df = combine_feature_files(arguments.sample, arguments.ref, arguments.workdir)
         df.to_csv(f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.annot.tsv', sep='\t', index=False, na_rep='NA')
         
+        # Variant Prediction
         logging.info('# Variant Prediction')
-        predict_variants(sv_types, arguments,[arguments.sample])
-            
-
+        score_variants(sv_types, arguments, arguments.sample)
+        
+        # Add Info Tag to VCF
         logging.info('# Add Info Tag to VCF')
-        add_info_tag_to_vcf(arguments.vcfs, arguments)
+        add_info_tag_to_vcf(arguments)
 
         logging.info('############### End DICAST ###############\n')
 
-    elif arguments.command == 'Cohort':
+    elif arguments.command == 'cohort':
             
-            logging.info('MODE: Cohort')
+            logging.info('MODE: cohort')
             logging.info(f'COHORT: {arguments.cohort}')
             logging.info(f'CHROMOSOMES: {arguments.chrom}')
             logging.info(f'REF: {arguments.ref}')
@@ -278,63 +331,87 @@ if __name__ == '__main__':
             logging.info(f'GC: {arguments.gc}')
             logging.info(f'MODELS: {arguments.models}')
             logging.info(f'THREADS: {arguments.threads}')
-            logging.info(f'PEDIGREE: {arguments.pedigree}')
             logging.info(f'VCFs: {", ".join([vcf for vcf in arguments.vcfs])}')
             logging.info(f'BAMs: {", ".join([bam for bam in arguments.bams])}')
-
             print('')
     
-            # restrict feature extration to a single chromosome if specified
+            # Restrict feature extration to a single chromosome if specified
             if arguments.chrom == 'all':
                 chroms = chroms
             else:
                 chroms = [arguments.chrom]
-        
-
-            logging.info('# Create Variant DataFrame')
             
-            VP = VariantRegenotyping(arguments.cohort, arguments.ref, arguments.workdir, 
-                            arguments.technology, arguments.vcfs, arguments.bams, chroms, arguments.fai, sv_types)
-            logging.info('# Read Variants into Dictionary')
-            VP.read_variants_cohort_to_dict()
-            logging.info('# Get Variants not present in all samples')
-            VP.get_missing_varaints_based_on_cohort()
+            # Create VCF and BAM dictionaries
+            vcf_dict = {vcf_path.split('/')[-2]: vcf_path for vcf_path in arguments.vcfs}
+            bam_dict = {bam_path.split('/')[-2]: bam_path for bam_path in arguments.bams}
+            samples = list(vcf_dict.keys())
+            num_samples = len(samples)
+            assert len(vcf_dict.keys()) == len(bam_dict.keys())
+            
+            # Variant Preparation
+            logging.info('# Create Variant DataFrame')
+            sample_dfs = []
+            for sample, vcf_file in vcf_dict.items():
+                VP = VariantPrep(arguments.cohort, sample, arguments.ref, arguments.workdir, 
+                                arguments.technology, {sample: vcf_file}, chroms, arguments.fai, 
+                                sv_types, mode='cohort')
+                VP.read_variants()
+                VP.filter_variants()
+                VP.filter_variants_cohort(num_samples)
+                sample_dfs.append(VP.get_variant_df())
+            cohort_df = pd.concat(sample_dfs, ignore_index=True)
+            cohort_df.to_csv(f'{arguments.cohort}_{arguments.ref}.SVs.raw.tsv', sep='\t', index=False, na_rep='NA')
+            
+            # Determine which variants are missing from each sample
+            logging.info('# Cohort Preparation')
+            CH = Cohort(cohort_df, samples, arguments.ref, arguments.workdir, vcf_dict)
+            CH.get_missing_variants()
+            CH.save_missing_variants()
+            
+            # Collect Reference Features
+            for sample in samples:
+                logging.info(f'# Collect Reference Features for {sample}')
+                extract_reference_features(arguments, sample)
 
-            logging.info('# Save Variants')
-            VP.save_missing_variants()
-
-            logging.info(f"# Collect Reference Features for samples {VP.df_variants['sample'].unique()}")
-            extract_reference_features(arguments, VP.df_variants['sample'].unique())
-
+            # Collect Alignment Features
             if arguments.exome:
-                target_regions = pd.read_csv(arguments.exome_regions, sep='\t', names=['chr','start','end'], dtype={'chr':str,'start':int,'stop':int},index_col=False)
+                logging.info('# Load Exome Target Regions')
+                target_regions = pd.read_csv(arguments.exome_regions, sep='\t', names=['chr','start','end'], dtype={'chr':str,'start':int,'stop':int}, index_col=False)
 
-            if arguments.technology == 'ill':
-               logging.info('# Collect Alignment Features for missing variants')
-               bam_dict = {sample: VP.samples_files[sample]['bam'] for sample in VP.df_variants['sample'].unique()}
+            logging.info(f'# Collect Alignment Features')
+            parallel_input = []
+            for sample in samples:
+                for sv_type in sv_types:
+                    for chrom in chroms:   
+                        variant_filename = '/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.raw.tsv'])
+                        variant_annot_filename = '/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.aln.ill.' + chrom + '.' + sv_type + '.tsv'])
+                        if arguments.exome:
+                            target_regions_chrom = target_regions.loc[target_regions['chr']==chrom].copy().reset_index(drop=True)
+                            parallel_input.append((bam_dict[sample], variant_filename, variant_annot_filename, 
+                                                chrom, sv_type, sample, target_regions_chrom))
+                        else:
+                            parallel_input.append((bam_dict[sample], variant_filename, variant_annot_filename, 
+                                                chrom, sv_type, sample))
+                            
+            Parallel(n_jobs=arguments.threads)(delayed(collect_aln_features)(*args) for args in parallel_input)
 
-               collect_samples_aln_feat(chroms, sv_types, arguments, bam_dict) # target_regions if arguments.exome else None
-
+            # Combination of Raw, Reference and Alignment Features
             logging.info('# Combination Output Files')
-            for sample in VP.samples:
+            for sample in samples:
                 df = combine_feature_files(sample, arguments.ref, arguments.workdir)
-                df = VP.add_dicast_cols(df)
                 df.to_csv(f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.annot.tsv', sep='\t', index=False, na_rep='NA')
-
+            
+            # Variant Prediction
             logging.info('# Variant Prediction')
-            predict_variants(sv_types, arguments,VP.samples)
+            for sample in samples:
+                score_variants(sv_types, arguments, sample)
 
-            logging.info('# Adding new variants to corresponding VCF files and adjusting Allele counts')
-            VP.read_regenotyped_variants()
-
-            logging.info('# Load vcf records to dictionary')
-            VP.load_records_to_dict()
-
-            logging.info('# Add new variants to VCF files and adjust Allele counts')
-            VP.update_variants_and_correct_ac()
-
-            logging.info('#Write regenotyped variants to VCF files')
-            VP.write_regenotyped_variants()
-
+            # Add variants to VCF files
+            logging.info('# Add variants to VCF files')
+            CH.load_dicast_predictions()
+            CH.update_cohort_information()
+            CH.cohort_df.to_csv(f'{arguments.cohort}_{arguments.ref}.SVs.updated.tsv', sep='\t', index=False, na_rep='NA')
+            CH.update_vcf_files()
+            
             logging.info('############### End DICAST ###############\n')
 
