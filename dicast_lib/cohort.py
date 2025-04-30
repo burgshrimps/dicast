@@ -118,14 +118,11 @@ class Cohort:
             # First pass: collect existing variants and update their info
             for record in reader:
                 variant_id = f"{record.INFO['SVTYPE']}_{record.CHROM}_{record.POS}_{record.INFO['END']}_{record.INFO['SVLEN']}"
-                #print(variant_id)
-                #if record.POS > 3300000:
-                #    break
+ 
                 existing_variants.add(variant_id)
                 # Update cohort info if needed
                 if variant_id in self.variant_cohort_map:
-                    if variant_id == 'DEL_chr1_3299708_3300416_708':
-                        print(self.variant_cohort_map[variant_id])
+
                     cohort_info = self.variant_cohort_map[variant_id]
                     record.INFO['COHORT_AC'] = cohort_info['ac']
                     record.INFO['SUPP_SAMPLES'] = cohort_info['samples']
@@ -175,6 +172,10 @@ class Cohort:
             qual = float(dicast_var['dicast_qual']) if 'dicast_qual' in dicast_var else None
             filt = ['PASS']
             
+            # Format SUPP_SAMPLES and SUPP_SAMPLES_GT properly
+            supp_samples = var_info['cohort_samples'].split(', ') if isinstance(var_info['cohort_samples'], str) else []
+            supp_samples_gt = var_info['cohort_samples_gt'].split(', ') if isinstance(var_info['cohort_samples_gt'], str) else []
+            
             # INFO fields
             info = {
                 'ORIGIN_ID': 'dicast.' + var_info['sv_type'] + '.' + str(idx),
@@ -187,8 +188,8 @@ class Cohort:
                 'SV_SUBTYPE': var_info['sv_type'],
                 'CALLER_Q': np.round(float(dicast_var['dicast_qual']), 4),
                 'DICAST_Q': np.round(float(dicast_var['dicast_qual']), 4),
-                'SUPP_SAMPLES': var_info['cohort_samples'],
-                'SUPP_SAMPLES_GT': var_info['cohort_samples_gt'],
+                'SUPP_SAMPLES': supp_samples,
+                'SUPP_SAMPLES_GT': supp_samples_gt,
                 'COHORT_AC': int(var_info['cohort_ac']),
             }
             
@@ -212,12 +213,3 @@ class Cohort:
         except Exception as e:
             print(f"Error creating VCF record for {var_info['id']}: {e}")
             return None
-
-
-
-
-
-
-    
-
-
