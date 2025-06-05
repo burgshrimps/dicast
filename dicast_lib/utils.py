@@ -265,12 +265,11 @@ def sample_vcf_to_dataframe(vcf: pysam.VariantFile, cohort: str, sample: str, re
         sample (str): Sample name
         reference (str): Reference genome name
         technology (str): Sequencing technology name
-        caller (str): SV caller name
         canonical_chroms (list): List of canonical chromosomes
         check_genotype (bool, optional): If true only keep records that are present in the sample being analyzed. Defaults to False.
 
     Returns:
-        pd.DataFrame: _description_
+        pd.DataFrame: Dataframe containing variant information
     """    
     
     sv_types = ['DEL', 'INS', 'INV', 'DUP', 'BND']
@@ -300,18 +299,32 @@ def sample_vcf_to_dataframe(vcf: pysam.VariantFile, cohort: str, sample: str, re
         # Information that is always present
         vcf_dict['id'].append(rec.id)
         vcf_dict['chrom'].append(rec.chrom)
-        vcf_dict['filter'].append(', '.join(rec.filter.keys()))
+        vcf_dict['filter'].append(','.join(rec.filter.keys()))
         vcf_dict['qual'].append(rec.qual)
         vcf_dict['sv_type'].append(sv_type)
         vcf_dict['start'].append(rec.start + 1)
         vcf_dict['genotype'].append(rec.samples[sample]['GT'])
         callers = [caller.lower() for caller in rec.info['CALLER'].split('|')]
-        vcf_dict['caller'].append(', '.join(callers))
+        vcf_dict['caller'].append(','.join(callers))
         vcf_dict['cohort_ac'].append(int(rec.info['COHORT_AC']))
+        
+        # Parse cohort samples and genotypes
         cohort_samples = rec.info['SUPP_SAMPLES']
-        vcf_dict['cohort_samples'].append(', '.join(cohort_samples))
+        # If it's already a list (from pysam), join it first
+        cohort_samples = ''.join(cohort_samples)
+        if isinstance(cohort_samples, str):
+            # Handle URL-encoded sample list
+            cohort_samples = cohort_samples.replace('%2C', ',').split(',')
+        vcf_dict['cohort_samples'].append(','.join(cohort_samples))
+        
         cohort_samples_gt = rec.info['SUPP_SAMPLES_GT']
-        vcf_dict['cohort_samples_gt'].append(', '.join(cohort_samples_gt))
+        # If it's already a list (from pysam), join it first
+        cohort_samples_gt = ''.join(cohort_samples_gt)
+        if isinstance(cohort_samples_gt, str):
+            # Handle URL-encoded genotype list
+            cohort_samples_gt = cohort_samples_gt.replace('%2C', ',').split(',')
+        vcf_dict['cohort_samples_gt'].append(','.join(cohort_samples_gt))
+            
         # Deletions
         if sv_type == 'DEL':
             vcf_dict['chrom_2'].append(np.nan)

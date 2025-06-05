@@ -10,11 +10,11 @@ import re
 from datetime import datetime
 import vcfpy
 import pysam
+import pickle
 
 from dicast_lib.parsing import parse_arguments
 from dicast_lib.utils import read_parameters, replace_filename
 from dicast_lib.prepare import VariantPrep
-from dicast_lib.regenotype_variants import VariantRegenotyping
 from dicast_lib.collect_reference import ReferenceAnnotator
 from dicast_lib.collect_illumina import AlignmentAnnotatorIllumina
 from dicast_lib.model import Dicast
@@ -134,6 +134,7 @@ def extract_reference_features(arguments: argparse.Namespace, sample: str):
     
     RA = ReferenceAnnotator(reference_filenames)
     RA.load_from_csv('/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.raw.tsv']))
+    print(RA.df_calls_annot.shape)
     RA.split_bnd()
     logging.info('# Annotation Repeats')
     RA.annotate_repeats()
@@ -154,6 +155,7 @@ def extract_reference_features(arguments: argparse.Namespace, sample: str):
     logging.info('# Aggregate Results')
     RA.aggregate_results()
     logging.info('# Save Reference Features')
+    print(RA.df_calls_annot.shape)
     RA.to_csv('/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.ref.tsv']))
 
 
@@ -351,28 +353,33 @@ if __name__ == '__main__':
             # Variant Preparation
             logging.info('# Create Variant DataFrame')
             sample_dfs = []
+            sample_dfs_unfiltered = []
             for sample, vcf_file in vcf_dict.items():
                 VP = VariantPrep(arguments.cohort, sample, arguments.ref, arguments.workdir, 
                                 arguments.technology, {sample: vcf_file}, chroms, arguments.fai, 
                                 sv_types, mode='cohort')
                 VP.read_variants()
+                sample_dfs_unfiltered.append(VP.get_variant_df())
                 VP.filter_variants()
                 VP.filter_variants_cohort(num_samples)
                 sample_dfs.append(VP.get_variant_df())
             cohort_df = pd.concat(sample_dfs, ignore_index=True)
-            cohort_df.to_csv(f'{arguments.cohort}_{arguments.ref}.SVs.raw.tsv', sep='\t', index=False, na_rep='NA')
+            cohort_df_unfiltered = pd.concat(sample_dfs_unfiltered, ignore_index=True)
+            cohort_df.to_csv(f'{arguments.workdir}/{arguments.cohort}_{arguments.ref}.SVs.raw.tsv', sep='\t', index=False, na_rep='NA')
+            cohort_df_unfiltered.to_csv(f'{arguments.workdir}/{arguments.cohort}_{arguments.ref}.SVs.raw.unfiltered.tsv', sep='\t', index=False, na_rep='NA')
             
             # Determine which variants are missing from each sample
             logging.info('# Cohort Preparation')
-            CH = Cohort(cohort_df, samples, arguments.ref, arguments.workdir, vcf_dict)
+            CH = Cohort(cohort_df, cohort_df_unfiltered, samples, arguments.ref, arguments.workdir, vcf_dict)
             CH.get_missing_variants()
             CH.save_missing_variants()
+            
             
             # Collect Reference Features
             for sample in samples:
                 logging.info(f'# Collect Reference Features for {sample}')
                 extract_reference_features(arguments, sample)
-
+            
             # Collect Alignment Features
             if arguments.exome:
                 logging.info('# Load Exome Target Regions')
@@ -405,12 +412,12 @@ if __name__ == '__main__':
             logging.info('# Variant Prediction')
             for sample in samples:
                 score_variants(sv_types, arguments, sample)
-
+            
             # Add variants to VCF files
             logging.info('# Add variants to VCF files')
             CH.load_dicast_predictions()
             CH.update_cohort_information()
-            CH.cohort_df.to_csv(f'{arguments.cohort}_{arguments.ref}.SVs.updated.tsv', sep='\t', index=False, na_rep='NA')
+            CH.find_overlapping_variants()
             CH.update_vcf_files()
             
             logging.info('############### End DICAST ###############\n')
