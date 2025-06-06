@@ -374,7 +374,6 @@ if __name__ == '__main__':
             CH.get_missing_variants()
             CH.save_missing_variants()
             
-            
             # Collect Reference Features
             for sample in samples:
                 logging.info(f'# Collect Reference Features for {sample}')
@@ -412,13 +411,17 @@ if __name__ == '__main__':
             logging.info('# Variant Prediction')
             for sample in samples:
                 score_variants(sv_types, arguments, sample)
-            
+
             # Add variants to VCF files
-            logging.info('# Add variants to VCF files')
+            logging.info('# Update cohort information')
             CH.load_dicast_predictions()
             CH.update_cohort_information()
+
+            logging.info('# Find overlapping variants')
             CH.find_overlapping_variants()
+
+            logging.info('# Update VCF files')
             CH.update_vcf_files()
-            
+
             logging.info('############### End DICAST ###############\n')
 
