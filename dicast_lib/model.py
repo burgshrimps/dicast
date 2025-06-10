@@ -4,8 +4,10 @@ import pickle
 import json
 import datetime
 import numpy as np
-import shap
+#import shap
 import yaml
+from packaging import version
+
 
 
 class Dicast:
@@ -187,6 +189,11 @@ class Dicast:
             self.variants_predict = self.variants.copy()
             
         # Predict
+        # compatability for version 1.7.4
+        # checks if the n_classes_ attribute is present in the model
+        if not hasattr(self.model, 'n_classes_'):
+            self.model.n_classes_ = 2
+
         if self.variants_predict.shape[0] > 0:
             X = self.variants_predict[self.features]
             self.variants_predict['dicast_qual'] = np.round(self.model.predict_proba(X)[:, 1], 3)
@@ -351,33 +358,33 @@ class Dicast:
         importance_df = pd.DataFrame(importance_dict)
         return importance_df.sort_values('importance', ascending=False)
 
-    def get_prediction_explanation(self, variant_idx: int = None) -> dict:
-        """Get SHAP values explaining a specific prediction or all predictions.
+    # def get_prediction_explanation(self, variant_idx: int = None) -> dict:
+    #     """Get SHAP values explaining a specific prediction or all predictions.
         
-        Args:
-            variant_idx (int, optional): Index of variant to explain. 
-                If None, returns explanations for all variants.
+    #     Args:
+    #         variant_idx (int, optional): Index of variant to explain. 
+    #             If None, returns explanations for all variants.
         
-        Returns:
-            dict: Dictionary containing feature contributions
-        """
+    #     Returns:
+    #         dict: Dictionary containing feature contributions
+    #     """
         
-        X = self.variants_predict[self.features]
-        explainer = shap.TreeExplainer(self.model)
-        shap_values = explainer.shap_values(X)
+    #     X = self.variants_predict[self.features]
+    #     explainer = shap.TreeExplainer(self.model)
+    #     shap_values = explainer.shap_values(X)
         
-        if variant_idx is not None:
-            # Return explanation for specific variant
-            contributions = dict(zip(self.features, shap_values[variant_idx]))
-            return {
-                'base_value': explainer.expected_value,
-                'prediction': self.variants_predict.iloc[variant_idx]['dicast_qual'],
-                'feature_contributions': dict(sorted(contributions.items(), key=lambda x: abs(x[1]), reverse=True))
-            }
-        else:
-            # Return all explanations
-            return {
-                'base_value': explainer.expected_value,
-                'shap_values': shap_values,
-                'features': self.features
-            }
+    #     if variant_idx is not None:
+    #         # Return explanation for specific variant
+    #         contributions = dict(zip(self.features, shap_values[variant_idx]))
+    #         return {
+    #             'base_value': explainer.expected_value,
+    #             'prediction': self.variants_predict.iloc[variant_idx]['dicast_qual'],
+    #             'feature_contributions': dict(sorted(contributions.items(), key=lambda x: abs(x[1]), reverse=True))
+    #         }
+    #     else:
+    #         # Return all explanations
+    #         return {
+    #             'base_value': explainer.expected_value,
+    #             'shap_values': shap_values,
+    #             'features': self.features
+    #         }

@@ -259,10 +259,10 @@ if __name__ == '__main__':
         print('')
 
         # Restrict feature extraction to a single chromosome if specified
-        if arguments.chrom == 'all':
-            chroms = chroms
+        if arguments.chrom:
+            chroms = arguments.chrom
         else:
-            chroms = [arguments.chrom]
+            chroms = chroms
         
         # Variant Preparation
         logging.info('# Create Variant DataFrame')
