@@ -1,10 +1,10 @@
 {
-    "date": "2024-12-03 14:05:51",
+    "date": "2025-06-11 13:17:26",
     "model_type": "XGBoost",
     "model_params": {
-        "n_estimators": 200,
+        "n_estimators": 100,
         "random_state": 0,
-        "n_jobs": 40
+        "n_jobs": 20
     },
     "features": [
         "sv_len",
@@ -132,12 +132,10 @@
         "manta",
         "lumpy",
         "cnvnator",
-        "gridss",
-        "gnomad",
-        "pav"
+        "gridss"
     ],
     "chroms_train": [],
-    "number_variants": 645245,
-    "number_variants_positive": 193161,
-    "number_variants_negative": 452084
+    "number_variants": 216615,
+    "number_variants_positive": 120351,
+    "number_variants_negative": 96264
 }
