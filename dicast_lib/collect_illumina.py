@@ -140,7 +140,10 @@ class AlignmentAnnotatorIllumina:
         baseline_coverage_std = []
         
         for i in range(n):
-            start = np.random.randint(0, self.bam.lengths[chrom_idx])
+            if len(self.bam.lengths)>1:
+                start = np.random.randint(0, self.bam.lengths[chrom_idx])
+            else:
+                start = np.random.randint(0, self.bam.lengths[0])            
             stop = start + s
             region = self.chrom + ':' + str(start) + '-' + str(stop)
             
@@ -174,7 +177,10 @@ class AlignmentAnnotatorIllumina:
             chrom_idx = int(self.chrom[3:]) - 1
         insert_sizes = []
         for i in range(n):
-            start = np.random.randint(0, self.bam.lengths[chrom_idx] - s)
+            if len(self.bam.lengths)>1:
+                start = np.random.randint(0, self.bam.lengths[chrom_idx])
+            else:
+                start = np.random.randint(0, self.bam.lengths[0]) 
             stop = start + s
             for read in self.bam.fetch(self.chrom, start, stop):
                 if not read.is_unmapped and not read.mate_is_unmapped:
@@ -203,7 +209,10 @@ class AlignmentAnnotatorIllumina:
         mapqs = []
 
         for i in range(n):
-            start = np.random.randint(0, self.bam.lengths[chrom_idx] - s)
+            if len(self.bam.lengths)>1:
+                start = np.random.randint(0, self.bam.lengths[chrom_idx])
+            else:
+                start = np.random.randint(0, self.bam.lengths[0]) 
             stop = start + s
             for read in self.bam.fetch(self.chrom, start, stop):
                 if not read.is_unmapped:
