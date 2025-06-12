@@ -127,7 +127,7 @@ class Dicast:
         
     def impute_missing_values(self):
         """ Impute missing values. """
-        
+
         # Impute GC Content
         self.variants['GC_content_left'] = self.variants['GC_content_left'].fillna(self.variants['GC_content_left'].median())
         self.variants['GC_content_right'] = self.variants['GC_content_right'].fillna(self.variants['GC_content_right'].median())
