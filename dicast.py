@@ -353,7 +353,6 @@ if __name__ == '__main__':
 
             # for single sample processing output the same VCF files
             if num_samples == 1:
-                print(vcf_dict)
                 vcf_path = vcf_dict[samples[0]]
                 vcf_out_path = vcf_path.replace('.vcf', '.regenotyped.vcf')
                 # copy the VCF file to the output directory
