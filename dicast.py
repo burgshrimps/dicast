@@ -260,10 +260,8 @@ if __name__ == '__main__':
         print('')
 
         # Restrict feature extraction to a single chromosome if specified
-        if arguments.chrom:
+        if arguments.chrom != 'all':
             chroms = arguments.chrom
-        else:
-            chroms = chroms
         
         # Variant Preparation
         logging.info('# Create Variant DataFrame')
@@ -339,10 +337,8 @@ if __name__ == '__main__':
             print('')
     
             # Restrict feature extration to a single chromosome if specified
-            if arguments.chrom:
+            if arguments.chrom != 'all':
                 chroms = arguments.chrom
-            else:
-                chroms = chroms
             
             # Create VCF and BAM dictionaries
             vcf_dict = {vcf_path.split('/')[-2]: vcf_path for vcf_path in arguments.vcfs}
@@ -381,7 +377,7 @@ if __name__ == '__main__':
                 CH = Cohort(cohort_df, cohort_df_unfiltered, samples, arguments.ref, arguments.workdir, vcf_dict)
                 CH.get_missing_variants()
                 CH.save_missing_variants()
-                
+                """
                 # Collect Reference Features
                 for sample in samples:
                     logging.info(f'# Collect Reference Features for {sample}')
@@ -419,7 +415,7 @@ if __name__ == '__main__':
                 logging.info('# Variant Prediction')
                 for sample in samples:
                     score_variants(sv_types, arguments, sample)
-
+                """
                 # Add variants to VCF files
                 logging.info('# Update cohort information')
                 CH.load_dicast_predictions()

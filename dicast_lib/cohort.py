@@ -377,8 +377,8 @@ class Cohort:
                 if variant_id in self.variant_cohort_map:
                     cohort_info = self.variant_cohort_map[variant_id]
                     record.INFO['COHORT_AC'] = cohort_info['ac']
-                    record.INFO['SUPP_SAMPLES'] = cohort_info['samples']
-                    record.INFO['SUPP_SAMPLES_GT'] = cohort_info['gts']
+                    record.INFO['SUPP_SAMPLES'] = ','.join(cohort_info['samples'])
+                    record.INFO['SUPP_SAMPLES_GT'] = ','.join(cohort_info['gts'])
                     statistics_dict[sample]['variants_updated'] += 1
                     statistics_dict[sample]['variants_updated_ids'].append(variant_id)
                 
