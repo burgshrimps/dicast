@@ -20,7 +20,7 @@ class AlignmentAnnotatorIllumina:
         """        
 
         # Meta data
-        self.sample = sample
+        self.sample = str(sample)
         self.chrom = chrom
         self.sv_type = sv_type
         self.features_breakpoints = ['ill_cov_mean_', 'ill_cov_std_', 'ill_isize_mean_', 'ill_isize_std_', 'ill_mapq_mean_', 'ill_mapq_std_', 

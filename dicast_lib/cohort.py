@@ -82,7 +82,7 @@ class Cohort:
                 
                 # Add sample if not already in the list
                 if sample not in variant_cohort_map[variant_id]['samples']:
-                    variant_cohort_map[variant_id]['samples'].append(sample)
+                    variant_cohort_map[variant_id]['samples'].append(str(sample))
                     variant_cohort_map[variant_id]['ac'] += 1
                     variant_cohort_map[variant_id]['gts'].append('0/1')
         self.variant_cohort_map = variant_cohort_map
