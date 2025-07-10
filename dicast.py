@@ -377,7 +377,7 @@ if __name__ == '__main__':
                 CH = Cohort(cohort_df, cohort_df_unfiltered, samples, arguments.ref, arguments.workdir, vcf_dict)
                 CH.get_missing_variants()
                 CH.save_missing_variants()
-                """
+                
                 # Collect Reference Features
                 for sample in samples:
                     logging.info(f'# Collect Reference Features for {sample}')
@@ -415,7 +415,7 @@ if __name__ == '__main__':
                 logging.info('# Variant Prediction')
                 for sample in samples:
                     score_variants(sv_types, arguments, sample)
-                """
+                
                 # Add variants to VCF files
                 logging.info('# Update cohort information')
                 CH.load_dicast_predictions()
