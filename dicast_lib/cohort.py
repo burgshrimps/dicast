@@ -5,21 +5,40 @@ import numpy as np
 import os
 import bioframe as bf
 import networkx as nx
+import ast
 
 class Cohort:
     """Represents a cohort of samples, each with associated variant data."""
 
-    def __init__(self, cohort_df: pd.DataFrame, cohort_df_unfiltered: pd.DataFrame, samples: list, ref: str, workdir: str, vcf_files: dict=None):
+    def __init__(self, cohort_df: pd.DataFrame, cohort_df_unfiltered: pd.DataFrame, samples: list, ref: str, workdir: str, family_dict: dict=None):
         
         self.samples = samples
         self.ref = ref
         self.workdir = workdir
         self.cohort_df = cohort_df
         self.cohort_df_unfiltered = cohort_df_unfiltered
-        self.vcf_files = vcf_files
         self.missing_variants_df = dict()
         self.dicast_thr = 0.4
+        self.family_dict = family_dict
 
+
+    def _parse_cohort_samples(self, cohort_samples_str):
+        """Parse cohort_samples string into list of dicts."""
+        if pd.isna(cohort_samples_str):
+            return []
+        
+        if isinstance(cohort_samples_str, list):
+            return cohort_samples_str
+        
+        if isinstance(cohort_samples_str, str):
+            try:
+                # Try to parse as literal (e.g., "[{'id': 'HG002', 'gt': '0/1'}]")
+                return ast.literal_eval(cohort_samples_str)
+            except (ValueError, SyntaxError):
+                # If that fails, return empty list
+                return []
+        
+        return []
 
     def get_missing_variants(self):
 
@@ -29,7 +48,29 @@ class Cohort:
         # For each sample, find variants where it's not in cohort_samples
         for sample in self.samples:
             # Create a boolean mask for rows where sample is not in cohort_samples
-            mask = ~cohort_df['cohort_samples'].str.contains(sample, na=False)
+            # cohort_samples now contains list of dicts like [{'id': 'HG002', 'gt': '0/1'}]
+            mask = ~cohort_df['cohort_samples'].apply(
+                lambda x: any(item.get('id') == sample for item in self._parse_cohort_samples(x))
+            )
+            
+            # Additional family filter: if family_dict is provided, require that cohort_samples 
+            # includes at least one sample from the same family
+            if self.family_dict is not None:
+                if sample not in self.family_dict:
+                    raise ValueError(f"Sample '{sample}' not found in family_dict. All samples must be present in family_dict when it is provided.")
+                
+                family_members = self.family_dict[sample]
+                print(cohort_df['cohort_samples'].dtype)
+                if family_members:  # Only apply filter if there are family members
+                    # Create a mask that checks if any family member is in cohort_samples
+                    family_mask = cohort_df['cohort_samples'].apply(
+                        lambda x: any(item.get('id') in family_members for item in self._parse_cohort_samples(x))
+                    )
+                    # Combine with existing mask - variant must be missing from sample AND have family member
+                    mask = mask & family_mask
+                else:
+                    # If no family members, return empty mask (no variants should be considered missing)
+                    mask = pd.Series([False] * len(cohort_df), index=cohort_df.index)
             
             # Store the filtered DataFrame in missing_ids
             self.missing_variants_df[sample] = cohort_df[mask].copy()
@@ -42,6 +83,7 @@ class Cohort:
             filename = sample + '_' + self.ref + '.SVs.raw.tsv'
             df = self.missing_variants_df[sample].copy()
             df['sample'] = sample
+            print(len(df))
             df.to_csv('/'.join([self.workdir, filename]), sep='\t', index=False, na_rep='NA')
 
 
@@ -74,15 +116,18 @@ class Cohort:
                 if variant_id not in variant_cohort_map:
                     # Find the original variant info
                     orig_var = self.cohort_df[self.cohort_df['id'] == variant_id].iloc[0]
+                    cohort_samples_list = self._parse_cohort_samples(orig_var['cohort_samples'])
                     variant_cohort_map[variant_id] = {
-                        'samples': orig_var['cohort_samples'].split(', ') if isinstance(orig_var['cohort_samples'], str) else [],
+                        'samples': [item.get('id') for item in cohort_samples_list],
                         'ac': orig_var['cohort_ac'],
-                        'gts': orig_var['cohort_samples_gt'].split(', ') if isinstance(orig_var['cohort_samples_gt'], str) else []
+                        'sc': orig_var['cohort_sc'],
+                        'gts': [item.get('gt') for item in cohort_samples_list]
                     }
                 
                 # Add sample if not already in the list
                 if sample not in variant_cohort_map[variant_id]['samples']:
                     variant_cohort_map[variant_id]['samples'].append(str(sample))
+                    variant_cohort_map[variant_id]['sc'] += 1
                     variant_cohort_map[variant_id]['ac'] += 1
                     variant_cohort_map[variant_id]['gts'].append('0/1')
         self.variant_cohort_map = variant_cohort_map
@@ -92,9 +137,13 @@ class Cohort:
         for variant_id, cohort_info in variant_cohort_map.items():
             mask = self.cohort_df['id'] == variant_id
             if mask.any():
-                self.cohort_df.loc[mask, 'cohort_samples'] = ','.join(cohort_info['samples'])
+                # Create new cohort_samples list format
+                new_cohort_samples = [{'id': sample, 'gt': gt} for sample, gt in zip(cohort_info['samples'], cohort_info['gts'])]
+                # Assign the same list object to each matching row
+                for idx in self.cohort_df.index[mask]:
+                    self.cohort_df.at[idx, 'cohort_samples'] = new_cohort_samples
                 self.cohort_df.loc[mask, 'cohort_ac'] = cohort_info['ac']
-                self.cohort_df.loc[mask, 'cohort_samples_gt'] = ','.join(cohort_info['gts'])
+                self.cohort_df.loc[mask, 'cohort_sc'] = cohort_info['sc']
                 self.cohort_df.loc[mask, 'updated'] = True
 
     def find_overlapping_variants(self):
@@ -225,16 +274,16 @@ class Cohort:
             # Annotate dicast predictions with cohort information from cohort_df
             sample_cohort_df = self.cohort_df[self.cohort_df['id'].isin(sample_dicast_predictions['id'])].copy().reset_index(drop=True)
             sample_cohort_df.drop_duplicates(subset=['id'], inplace=True)
-            sample_dicast_predictions = pd.merge(sample_dicast_predictions, sample_cohort_df[['id', 'cohort_ac', 'cohort_samples', 'cohort_samples_gt']], on='id', how='left')
+            sample_dicast_predictions = pd.merge(sample_dicast_predictions, sample_cohort_df[['id', 'cohort_ac', 'cohort_samples']], on='id', how='left')
             sample_dicast_predictions = sample_dicast_predictions[['id', 'sample', 'sv_type', 'chrom', 'start', 'end', 'sv_len',
-                                                                   'dicast_qual', 'cohort_ac', 'cohort_samples', 'cohort_samples_gt']].copy().reset_index(drop=True)
+                                                                   'dicast_qual', 'cohort_ac', 'cohort_samples']].copy().reset_index(drop=True)
             
             # Get variants that are relevant for this sample:
             # 1. Variants from cohort_df_unfiltered that contain this sample
             sample_cohort_variants = self.cohort_df_unfiltered[self.cohort_df_unfiltered['sample'] == sample].copy()
             sample_cohort_variants.rename(columns={'qual': 'dicast_qual'}, inplace=True)
             sample_cohort_variants = sample_cohort_variants[['id', 'sample', 'sv_type', 'chrom', 'start', 'end', 'sv_len',
-                                                             'dicast_qual', 'cohort_ac', 'cohort_samples', 'cohort_samples_gt']].copy().reset_index(drop=True)
+                                                             'dicast_qual', 'cohort_ac', 'cohort_samples']].copy().reset_index(drop=True)
             
             # Store original variant IDs for statistics
             original_variant_ids = set(sample_cohort_variants['id'])
@@ -318,164 +367,86 @@ class Cohort:
                             self.new_variants_blacklist[sample].append(variant['id'])
 
 
-    def update_vcf_files(self):
+    def update_csv_file(self, csv_file_path):
+        """Update a CSV file with new cohort information, separating by sample and updating existing records."""
         
-        statistics_dict = dict()
-        
-        # Process each sample's VCF
+        # Read the CSV file
+        try:
+            csv_df = pd.read_csv(csv_file_path)
+        except Exception as e:
+            print(f"Error reading CSV file {csv_file_path}: {e}")
+            return
+
+        # Initialize existing variants for each sample
+        self.existing_variants = dict()
         for sample in self.samples:
-            if sample not in self.vcf_files:
+            self.existing_variants[sample] = csv_df[csv_df['SAMPLE'] == sample]['ID'].tolist()
+        
+        # First pass: update existing variants with new cohort information
+        for idx, row in csv_df.iterrows():
+            
+            # Get sample and variant id
+            sample = row['SAMPLE']
+            variant_id = row['ID']
+
+            # Skip variants in sample-specific blacklist
+            if variant_id in self.variants_blacklist.get(sample, []):
+                continue
+            
+            # Update cohort info if variant is in variant_cohort_map
+            if variant_id in self.variant_cohort_map:
+                cohort_info = self.variant_cohort_map[variant_id]
+                csv_df.at[idx, 'COHORT_AC'] = cohort_info['ac']
+                csv_df.at[idx, 'COHORT_SC'] = cohort_info['sc']
+                csv_df.at[idx, 'COHORT_SUP_SAMPLES'] = [{'id': sample, 'gt': gt} for sample, gt in zip(cohort_info['samples'], cohort_info['gts'])]
+
+        # Second pass: add missing variants that pass the threshold
+        missing_variants = self.dicast_predictions[self.dicast_predictions['dicast_qual'] >= self.dicast_thr].copy().reset_index(drop=True)
+        new_rows = []
+        for idx, row in missing_variants.iterrows():
+            
+            # Get sample and variant id
+            sample = row['sample']
+            variant_id = row['id']
+            
+            # Skip variants in sample-specific blacklist or already in CSV
+            if variant_id in self.variants_blacklist.get(sample, []) or variant_id in self.existing_variants[sample]:
                 continue
 
-            statistics_dict[sample] = {'variants_total': 0, 
-                                       'variants_updated': 0, 
-                                       'variants_added': 0,
-                                       'variants_dicast': 0,
-                                       'variants_old_skipped': 0,
-                                       'variants_new_skipped': 0,
-                                       'variants_exist_skipped': 0,
-                                       'variants_total_ids' : [],
-                                       'variants_updated_ids' : [],
-                                       'variants_added_ids' : [],
-                                       'variants_dicast_ids' : [],
-                                       'variants_old_skipped_ids' : [],
-                                       'variants_new_skipped_ids' : [],
-                                       'variants_exist_skipped_ids' : []}
-                
-            vcf_path = self.vcf_files[sample]
-            vcf_out_path = vcf_path.replace('.vcf', '.regenotyped.vcf')
-            
-            # Read the VCF
-            reader = vcfpy.Reader.from_path(vcf_path)
-            
-            # Create a writer with the same header
-            header = reader.header
-            
-            writer = vcfpy.Writer.from_path(vcf_out_path, header)
-            
-            # Create a map of existing variant IDs in this sample's VCF
-            existing_variants = set()
-            updated_records = []
-            
-            # Get sample-specific blacklist
-            sample_blacklist = self.variants_blacklist.get(sample, [])
-            
-            # First pass: collect existing variants and update their info
-            for record in reader:
-                variant_id = f"{record.INFO['SVTYPE']}_{record.CHROM}_{record.POS}_{record.INFO['END']}_{record.INFO['SVLEN']}"
-                existing_variants.add(variant_id)
-                statistics_dict[sample]['variants_total'] += 1
-                statistics_dict[sample]['variants_total_ids'].append(variant_id)
-                
-                # Skip variants in sample-specific blacklist
-                if variant_id in sample_blacklist:
-                    statistics_dict[sample]['variants_old_skipped'] += 1
-                    statistics_dict[sample]['variants_old_skipped_ids'].append(variant_id)
-                    continue
-                
-                # Update cohort info if needed
-                if variant_id in self.variant_cohort_map:
-                    cohort_info = self.variant_cohort_map[variant_id]
-                    record.INFO['COHORT_AC'] = cohort_info['ac']
-                    record.INFO['SUPP_SAMPLES'] = ','.join(cohort_info['samples'])
-                    record.INFO['SUPP_SAMPLES_GT'] = ','.join(cohort_info['gts'])
-                    statistics_dict[sample]['variants_updated'] += 1
-                    statistics_dict[sample]['variants_updated_ids'].append(variant_id)
-                
-                updated_records.append(record)
-            
-            # Write updated existing records
-            for record in updated_records:
-                writer.write_record(record)
-            
-            # Second pass: add missing variants that pass the threshold
-            missing_variants = self.dicast_predictions[
-                (self.dicast_predictions['sample'] == sample) & 
-                (self.dicast_predictions['dicast_qual'] >= self.dicast_thr)
-            ]
-            statistics_dict[sample]['variants_dicast'] += len(missing_variants)
-            statistics_dict[sample]['variants_dicast_ids'].extend(missing_variants['id'].tolist())
-            
-            for idx, variant in missing_variants.iterrows():
-                variant_id = variant['id']
-                
-                # Skip if already in VCF
-                if variant_id in existing_variants:
-                    statistics_dict[sample]['variants_exist_skipped'] += 1
-                    statistics_dict[sample]['variants_exist_skipped_ids'].append(variant_id)
-                    continue
-                
-                # Skip variants in sample-specific blacklist
-                if variant_id in sample_blacklist:
-                    statistics_dict[sample]['variants_new_skipped'] += 1
-                    statistics_dict[sample]['variants_new_skipped_ids'].append(variant_id)
-                    continue
-                    
-                # Get full variant information from cohort_df
-                var_info = self.cohort_df[self.cohort_df['id'] == variant_id].iloc[0]
-                
-                # Create a new VCF record
-                new_record = self._create_vcf_record(var_info, variant, idx)
-                
-                if new_record:
-                    writer.write_record(new_record)
-                    statistics_dict[sample]['variants_added'] += 1
-                    statistics_dict[sample]['variants_added_ids'].append(variant_id)
-
-            writer.close()
-
-
-    def _create_vcf_record(self, var_info, dicast_var, idx):
-        """Create a VCF record for a missing variant."""
+            orig_row = csv_df[csv_df['ID'] == variant_id].copy().iloc[0]
+            orig_row['SAMPLE'] = sample
+            orig_row['QUAL'] = np.round(row['dicast_qual'], 3)
+            orig_row['FILTER'] = ['PASS']
+            orig_row['GT'] = '0/1'
+            orig_row['ID'] = orig_row['SAMPLE'] + '.MERGED.' + orig_row['TYPE'] + '.' + orig_row['CHR'].replace('chr', '') + '.' + orig_row['START'].astype(str) + '.' + orig_row['SIZE'].astype(str)
+            orig_row['NUM_SUPP_CALLERS'] = 1
+            orig_row['DICAST'] = True
+            orig_row['DELLY'] = False
+            orig_row['MANTA'] = False
+            orig_row['LUMPY'] = False
+            orig_row['GRIDSS'] = False
+            orig_row['CNVNATOR'] = False
+            orig_row['SNIFFLES'] = False
+            new_rows.append(orig_row)
         
-        try:
-            # Basic variant fields
-            chrom = var_info['chrom']
-            pos = int(var_info['start'])
-            id = '.'
-            ref = 'N'  # Placeholder reference allele
-            alt = [vcfpy.SymbolicAllele(var_info['sv_type'])]
-            qual = float(dicast_var['dicast_qual']) if 'dicast_qual' in dicast_var else None
-            filt = ['PASS']
+        # Add new rows to CSV
+        csv_df = pd.concat([csv_df, pd.DataFrame(new_rows)], ignore_index=True)
+        csv_df.sort_values(by=['SAMPLE', 'ID'], inplace=True)
+        
+        # Filter out current sample from COHORT_SUP_SAMPLES for all rows
+        for idx, row in csv_df.iterrows():
+            sample = row['SAMPLE']
+            # Parse the supporting samples (handle both string and list formats)
+            supporting_samples = row['COHORT_SUP_SAMPLES']
+            if isinstance(supporting_samples, str):
+                try:
+                    supporting_samples = self._parse_cohort_samples(supporting_samples)
+                except:
+                    continue
             
-            # Format SUPP_SAMPLES and SUPP_SAMPLES_GT properly
-            supp_samples = var_info['cohort_samples'].split(', ') if isinstance(var_info['cohort_samples'], str) else []
-            supp_samples_gt = var_info['cohort_samples_gt'].split(', ') if isinstance(var_info['cohort_samples_gt'], str) else []
-            
-            # INFO fields
-            info = {
-                'ORIGIN_ID': 'dicast.' + var_info['sv_type'] + '.' + str(idx),
-                'SVTYPE': var_info['sv_type'],
-                'SAMPLE_ID': dicast_var['sample'],
-                'CALLER': 'DICAST',
-                'NUM_SUPP_CALLERS': 1,
-                'END': int(var_info['end']),
-                'SVLEN': int(var_info['sv_len']),
-                'SV_SUBTYPE': var_info['sv_type'],
-                'CALLER_Q': np.round(float(dicast_var['dicast_qual']), 4),
-                'DICAST_Q': np.round(float(dicast_var['dicast_qual']), 4),
-                'SUPP_SAMPLES': ','.join(supp_samples),
-                'SUPP_SAMPLES_GT': ','.join(supp_samples_gt),
-                'COHORT_AC': int(var_info['cohort_ac']),
-            }
-            
-            # Format and samples
-            fmt = ['GT']
-            calls = [vcfpy.Call(dicast_var['sample'], {'GT': '0/1'})]
-            
-            return vcfpy.Record(
-                CHROM=chrom,
-                POS=pos,
-                ID=[id],
-                REF=ref,
-                ALT=alt,
-                QUAL=qual,
-                FILTER=filt,
-                INFO=info,
-                FORMAT=fmt,
-                calls=calls
-            )
-            
-        except Exception as e:
-            print(f"Error creating VCF record for {var_info['id']}: {e}")
-            return None
+            if isinstance(supporting_samples, list):
+                # Filter out the current sample
+                filtered_samples = [entry for entry in supporting_samples if entry.get('id') != sample]
+                csv_df.at[idx, 'COHORT_SUP_SAMPLES'] = filtered_samples
+        
+        csv_df.to_csv(csv_file_path[:-4] + '.regenotyped.csv', sep='\t', index=False)

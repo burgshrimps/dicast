@@ -266,7 +266,9 @@ if __name__ == '__main__':
         # Variant Preparation
         logging.info('# Create Variant DataFrame')
         VP = VariantPrep(arguments.cohort, arguments.sample, arguments.ref, arguments.workdir, 
-                         arguments.technology, arguments.vcfs, chroms, arguments.fai, sv_types)
+                         arguments.technology, chroms, arguments.fai, sv_types)
+        logging.info('# Read VCFs')
+        VP.read_vcf(arguments.vcfs, arguments.sample)
         logging.info('# Read Variants')
         VP.read_variants() 
         logging.info('# Filter Variants')
@@ -332,7 +334,9 @@ if __name__ == '__main__':
             logging.info(f'GC: {arguments.gc}')
             logging.info(f'MODELS: {arguments.models}')
             logging.info(f'THREADS: {arguments.threads}')
-            logging.info(f'VCFs: {", ".join([vcf for vcf in arguments.vcfs])}')
+            logging.info(f'CSV: {arguments.csv}')
+            logging.info(f'PED: {arguments.ped}')
+            logging.info(f'FILTER_FAM: {arguments.filter_fam}')
             logging.info(f'BAMs: {", ".join([bam for bam in arguments.bams])}')
             print('')
     
@@ -340,41 +344,52 @@ if __name__ == '__main__':
             if arguments.chrom != 'all':
                 chroms = arguments.chrom
             
-            # Create VCF and BAM dictionaries
-            vcf_dict = {vcf_path.split('/')[-2]: vcf_path for vcf_path in arguments.vcfs}
+            # Create BAM dictionaries
             bam_dict = {bam_path.split('/')[-2]: bam_path for bam_path in arguments.bams}
-            samples = list(vcf_dict.keys())
+
+            # Read in PED file
+            df_ped = pd.read_csv(arguments.ped, sep='\t', header=0, dtype={'Name':str,'Family':str,'Mother':str,'Father':str}, index_col=None)
+            
+            # Create family dictionary - maps each sample to other samples in the same family
+            family_dict = {}
+            for family in df_ped['Family'].unique():
+                family_samples = df_ped[df_ped['Family'] == family]['Name'].tolist()
+                for sample in family_samples:
+                    # Other samples in the same family (excluding the sample itself)
+                    family_dict[sample] = [s for s in family_samples if s != sample]
+
+            # Read in CSV file
+            df = pd.read_csv(arguments.csv)
+            samples = df['SAMPLE'].unique()
             num_samples = len(samples)
-            assert len(vcf_dict.keys()) == len(bam_dict.keys())
+            assert len(bam_dict.keys()) == num_samples
 
             # for single sample processing output the same VCF files
             if num_samples == 1:
-                vcf_path = vcf_dict[samples[0]]
-                vcf_out_path = vcf_path.replace('.vcf', '.regenotyped.vcf')
+                csv_path = arguments.csv
+                csv_path_path = csv_path.replace('.csv', '.regenotyped.csv')
                 # copy the VCF file to the output directory
-                shutil.copy(vcf_path, vcf_out_path)
+                shutil.copy(csv_path, csv_path_path)
             else:
                 # Variant Preparation
                 logging.info('# Create Variant DataFrame')
-                sample_dfs = []
-                sample_dfs_unfiltered = []
-                for sample, vcf_file in vcf_dict.items():
-                    VP = VariantPrep(arguments.cohort, sample, arguments.ref, arguments.workdir, 
-                                    arguments.technology, {sample: vcf_file}, chroms, arguments.fai, 
-                                    sv_types, mode='cohort')
-                    VP.read_variants()
-                    sample_dfs_unfiltered.append(VP.get_variant_df())
-                    VP.filter_variants()
-                    VP.filter_variants_cohort(num_samples)
-                    sample_dfs.append(VP.get_variant_df())
-                cohort_df = pd.concat(sample_dfs, ignore_index=True)
-                cohort_df_unfiltered = pd.concat(sample_dfs_unfiltered, ignore_index=True)
+                VP = VariantPrep(arguments.cohort, arguments.ref, arguments.workdir, 
+                                arguments.technology, chroms, arguments.fai, sv_types, mode='cohort')
+                VP.read_csv(df)
+                VP.reformat_csv(arguments.cohort, arguments.technology, arguments.ref)
+                cohort_df_unfiltered = VP.get_variant_df()
+                VP.filter_variants()
+                VP.filter_variants_cohort(num_samples)
+                cohort_df = VP.get_variant_df()
                 cohort_df.to_csv(f'{arguments.workdir}/{arguments.cohort}_{arguments.ref}.SVs.raw.tsv', sep='\t', index=False, na_rep='NA')
                 cohort_df_unfiltered.to_csv(f'{arguments.workdir}/{arguments.cohort}_{arguments.ref}.SVs.raw.unfiltered.tsv', sep='\t', index=False, na_rep='NA')
                 
                 # Determine which variants are missing from each sample
                 logging.info('# Cohort Preparation')
-                CH = Cohort(cohort_df, cohort_df_unfiltered, samples, arguments.ref, arguments.workdir, vcf_dict)
+                if arguments.filter_fam:
+                    CH = Cohort(cohort_df, cohort_df_unfiltered, samples, arguments.ref, arguments.workdir, family_dict)
+                else:
+                    CH = Cohort(cohort_df, cohort_df_unfiltered, samples, arguments.ref, arguments.workdir)
                 CH.get_missing_variants()
                 CH.save_missing_variants()
                 
@@ -424,8 +439,7 @@ if __name__ == '__main__':
                 logging.info('# Find overlapping variants')
                 CH.find_overlapping_variants()
 
-                logging.info('# Update VCF files')
-                CH.update_vcf_files()
+                logging.info('# Update CSV file')
+                CH.update_csv_file(arguments.csv)
 
                 logging.info('############### End DICAST ###############\n')
-

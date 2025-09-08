@@ -2,7 +2,7 @@ python3 dicast.py cohort \
     --cohort 1kg \
     --ref hg38 \
     --technology ill \
-    --workdir /confidential/tGenVar/scripts/tGenVar/dicast/tmp_cohort \
+    --workdir /confidential/tGenVar/scripts/tGenVar/dicast/test_cohort \
     --fai /confidential/tGenVar/ref/hg38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.fai \
     --repeats /confidential/tGenVar/ref/hg38/annotation/hg38_repeatmasker.tsv \
     --cgis /confidential/tGenVar/ref/hg38/annotation/hg38_cpg_islands.tsv \
@@ -14,10 +14,9 @@ python3 dicast.py cohort \
     --gc /confidential/tGenVar/ref/hg38/annotation/hg38_gc_content.bw \
     --models /confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/models/deployment \
     --threads 60 \
-    --vcfs /confidential/typo/cohorts/AshkenazimTrio/calls/merged/GRCh38/HG002/variants.merged.cohort_ac.vcf \
-           /confidential/typo/cohorts/AshkenazimTrio/calls/merged/GRCh38/HG003/variants.merged.cohort_ac.vcf \
-           /confidential/typo/cohorts/AshkenazimTrio/calls/merged/GRCh38/HG004/variants.merged.cohort_ac.vcf \
-    --bams /confidential/typo/cohorts/AshkenazimTrio/aligned_bam/HG002/GRCh38.bwa_mem.pe.sorted.mdup.recal.bam \
-           /confidential/typo/cohorts/AshkenazimTrio/aligned_bam/HG003/GRCh38.bwa_mem.pe.sorted.mdup.recal.bam \
-           /confidential/typo/cohorts/AshkenazimTrio/aligned_bam/HG004/GRCh38.bwa_mem.pe.sorted.mdup.recal.bam \
+    --bams /confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/test_cohort/HG001/HG001_GRCh38.bwa_mem.pe.sorted.mdup.recal.bam \
+           /confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/test_cohort/HG002/HG002_GRCh38.bwa_mem.pe.sorted.mdup.recal.bam \
+    --filter-fam \
+    --csv /confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/test_cohort/Annotated_all.merged.formatted.cohort_ac.csv \
+    --ped /confidential/FamilyR13/DATA/10x/SCRIPT/tGenVar/dicast/test_cohort/pedigree.ped
         

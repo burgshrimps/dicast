@@ -29,9 +29,11 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_call.add_argument('--exome', help='Flag for Exome sequencing data', action='store_true')
     parser_call.add_argument('--exome_regions', help='BED file with enrichment kit regions for WES')
     
-    parser_cohort = subparsers.add_parser('cohort', help='Cohort analysis')
-    parser_cohort.add_argument('--vcfs', nargs='*', help='List of VCF files for cohort analysis')
+    parser_cohort = subparsers.add_parser('cohort', help='Cohort calling')
+    parser_cohort.add_argument('--csv', help='CSV file with variants')
     parser_cohort.add_argument('--bams', nargs='*', help='List of BAM files')
+    parser_cohort.add_argument('--ped', help='PED file with family information')
+    parser_cohort.add_argument('--filter-fam', action='store_true', help='If true restrict cohort calling for family members only')
     parser_cohort.add_argument('--cohort', help='Cohort name', required=True)
     parser_cohort.add_argument('--chrom', help='Chromosome', default='all', nargs='*')
     parser_cohort.add_argument('--ref', help='Reference genome name', default='hg38')

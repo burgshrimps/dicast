@@ -10,12 +10,11 @@ from dicast_lib.utils import replace_filename, caller_vcf_to_dataframe, sample_v
 class VariantPrep:
     """ Class to prepare raw variant calls for feature extraction. """
 
-    def __init__(self, cohort: str, sample: str, ref: str, workdir: str, technology: str, vcfs: list, chroms: list, chrom_sizes: str, sv_types: list, mode: str='single'):
+    def __init__(self, cohort: str, ref: str, workdir: str, technology: str, chroms: list, chrom_sizes: str, sv_types: list, mode: str='single'):
         """ Constructor for VariantPrep class.
 
         Args:
             cohort (str): Cohort name
-            sample (str): Sample name
             ref (str): Reference genome name
             workdir (str): Working and output directory
             chroms (list): Chromosomes to use
@@ -25,11 +24,9 @@ class VariantPrep:
 
         # Input parameters
         self.cohort = cohort
-        self.sample = sample
         self.ref = ref
         self.technology = technology
         self.workdir = workdir
-        self.vcfs = vcfs
         self.sv_types = sv_types
         self.mode = mode
 
@@ -39,6 +36,30 @@ class VariantPrep:
 
         # List of chromosomes to use
         self.chroms = chroms
+
+
+    def read_vcf(self, vcfs: list, sample: str):
+        """ Reads VCF files and stores them in pandas dataframe. """
+        self.sample = sample
+        self.vcfs = vcfs
+
+
+    def read_csv(self, df: pd.DataFrame):
+        """ Reads CSV file and stores them in pandas dataframe. """
+        self.df_variants = df
+
+
+    def reformat_csv(self, cohort: str, technology: str, reference: str):
+        """ Reformats CSV file and stores them in pandas dataframe. """
+
+        # Keep only relevant columns
+        self.df_variants = self.df_variants[['ID', 'SAMPLE', 'TYPE', 'CHR', 'START', 'END', 'SIZE', 'FILTER', 'QUAL', 'GT', 'COHORT_AC', 'COHORT_SC', 'COHORT_SUP_SAMPLES']].copy()
+        self.df_variants.columns = ['id', 'sample', 'sv_type', 'chrom', 'start', 'end', 'sv_len', 'filter', 'qual', 'genotype', 'cohort_ac', 'cohort_sc', 'cohort_samples']
+        self.df_variants['cohort'] = cohort
+        self.df_variants['technology'] = technology
+        self.df_variants['reference'] = reference
+        self.df_variants['caller'] = 'dicast'
+        self.df_variants['chrom_2'] = np.nan
 
 
     def read_variants(self):
@@ -121,7 +142,7 @@ class VariantPrep:
     def filter_variants_cohort(self, num_samples: int):
        
        # Filter out variants that are present in all samples
-       self.df_variants = self.df_variants[self.df_variants['cohort_ac'] < num_samples].copy().reset_index(drop=True) 
+       self.df_variants = self.df_variants[self.df_variants['cohort_sc'] < num_samples].copy().reset_index(drop=True) 
 
        # Filter based on dicast quality
        self.df_variants = self.df_variants[self.df_variants['qual'] >= 0.1].copy().reset_index(drop=True)
