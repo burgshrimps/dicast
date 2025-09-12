@@ -449,4 +449,4 @@ class Cohort:
                 filtered_samples = [entry for entry in supporting_samples if entry.get('id') != sample]
                 csv_df.at[idx, 'COHORT_SUP_SAMPLES'] = filtered_samples
         
-        csv_df.to_csv(csv_file_path[:-4] + '.regenotyped.csv', sep='\t', index=False)
+        csv_df.to_csv(csv_file_path[:-4] + '.regenotyped.csv', index=False)
