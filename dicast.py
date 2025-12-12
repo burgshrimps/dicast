@@ -29,7 +29,7 @@ chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8',
           'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
 
 # List of SV types currently supported by dicast
-sv_types = ['DEL', 'DUP', 'INS', 'INV']
+sv_types = ['DEL', 'DUP', 'INS', 'INV', 'BND']
 
 
 def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot_filename: str, chrom: str, sv_type: str, sample: str, exome_regions: pd.DataFrame=None):
@@ -195,7 +195,7 @@ def score_variants(sv_types: list, arguments: argparse.Namespace, sample: str):
     variant_features_filename = f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.annot.tsv'
     dicast_dfs = []
     for sv_type in sv_types:
-        if sv_type != 'INV':
+        if sv_type not in ['INV', 'BND']:
             model_filename = f'{arguments.models}/dicast_{sv_type}.json'
             dicast = Dicast(sv_type)
             dicast.load_from_csv(variant_features_filename)
@@ -203,11 +203,17 @@ def score_variants(sv_types: list, arguments: argparse.Namespace, sample: str):
             dicast.load(model_filename)
             dicast.predict()
             dicast_dfs.append(dicast.to_df())   
-        else:
+        elif sv_type == 'INV':
             dicast = Dicast(sv_type)
             dicast.load_from_csv(variant_features_filename)
             dicast.impute_missing_values()
             dicast.score_inversions()
+            dicast_dfs.append(dicast.to_df())
+        elif sv_type == 'BND':
+            dicast = Dicast(sv_type)
+            dicast.load_from_csv(variant_features_filename)
+            dicast.impute_missing_values()
+            dicast.score_translocations()
             dicast_dfs.append(dicast.to_df())
     dicast_df = pd.concat([df for df in dicast_dfs if not df.empty], ignore_index=True)
     dicast_df.to_csv(f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.dicast.tsv', sep='\t', index=False, na_rep='NA')
