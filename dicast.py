@@ -22,6 +22,10 @@ from dicast_lib.model import Dicast
 from dicast_lib.model_exome import DicastExome
 from dicast_lib.cohort import Cohort
 
+# suppress htslib warnings (keep errors)
+# this is necessary to avoid stacking warnings when executing dicast with S3 files (in that case the bai can be older than the bam file)
+pysam.set_verbosity(0)
+
 
 # List of chromosomes to process
 chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 

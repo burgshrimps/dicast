@@ -27,7 +27,7 @@ class AlignmentAnnotatorIllumina:
                                      'ill_clipreads_', 'ill_splitreads_', 'ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_', 'ill_disco_tx_']
         self.features_body = ['ill_cov_mean_', 'ill_cov_std_']
         self.features_connection = ['ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_', 'ill_splitreads_']
-        self.cov_thr = 5 # Threshold for log2 change in coverage to be considered for feature extraction, otherwise jump
+        self.cov_thr = 3 # Threshold for log2 change in coverage to be considered for feature extraction, otherwise jump
         
         # Alignment file'
         self.alignment_file = bam_filename
