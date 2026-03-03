@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import re
+import time
 
 from dicast_lib.utils import mad
 
@@ -10,24 +11,29 @@ from dicast_lib.utils import mad
 class AlignmentAnnotatorIllumina:
     """ Class for annotating SVs with features derived from the alignment of short reads. """    
 
-    def __init__(self, bam_filename: str, chrom: str, sv_type: str, sample: str):
+    def __init__(self, bam_filename: str, chrom: str, sv_type: str, sample: str, log_file: str = None, job_id: str = None):
         """ Initializes the class.
 
         Args:
             bam_filename (str): Path to the BAM file containing the alignment of short reads
             chrom (str): Chromosome name
             sv_type (str): Structural variant type (DEL, DUP, INV, INS, BND)
+            log_file (str): Path to log file for writing
+            job_id (str): Job identifier for logging
         """        
 
         # Meta data
         self.sample = str(sample)
         self.chrom = chrom
         self.sv_type = sv_type
+        self.log_file = log_file
+        self.job_id = job_id or f'{sample}_{chrom}_{sv_type}'
         self.features_breakpoints = ['ill_cov_mean_', 'ill_cov_std_', 'ill_isize_mean_', 'ill_isize_std_', 'ill_mapq_mean_', 'ill_mapq_std_', 
                                      'ill_clipreads_', 'ill_splitreads_', 'ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_', 'ill_disco_tx_']
         self.features_body = ['ill_cov_mean_', 'ill_cov_std_']
         self.features_connection = ['ill_disco_ff_', 'ill_disco_rr_', 'ill_disco_rf_', 'ill_splitreads_']
         self.cov_thr = 3 # Threshold for log2 change in coverage to be considered for feature extraction, otherwise jump
+        self.max_fetch_reads = 10000  # Hard cap on reads fetched per bin
         
         # Alignment file'
         self.alignment_file = bam_filename
@@ -70,6 +76,16 @@ class AlignmentAnnotatorIllumina:
                                 'IV' : []}
         
         
+    def _log(self, msg: str, level: str = 'INFO'):
+        """Write log message to file and stdout."""
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+        log_msg = f'{timestamp} [{self.job_id}] {level}: {msg}'
+        if self.log_file:
+            with open(self.log_file, 'a') as f:
+                f.write(log_msg + '\n')
+                f.flush()
+        print(log_msg, flush=True)
+
     def prepare_dataframe(self):
         """ Prepares DataFrame for SV annotation. """
         
@@ -347,9 +363,17 @@ class AlignmentAnnotatorIllumina:
     def annotate_coverage(self):
         """ Annotates SVs with mean and std coverage for all bins around the SV breakpoints. """        
         
+        self._log(f'Starting coverage annotation: {len(self.df_calls_annot)} variants')
+        start_coverage_time = time.time()
+
         # Calculate coverage around breakpoints
         for suffix, values in self.bin_dict_bps.items():
+            variants_before = len(self.df_calls_annot)
             self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, values[0], values[1], values[2], values[3], values[4], suffix)
+            variants_after = len(self.df_calls_annot)
+            excluded = variants_before - variants_after
+            elapsed = time.time() - start_coverage_time
+            #self._log(f'  Bin {suffix}: {variants_before:>4d} → {variants_after:>4d} vars ({excluded:>3d} excl), elapsed {elapsed:>6.1f}s', level='BIN')
             
         if self.sv_type == 'DEL' or self.sv_type == 'DUP' or self.sv_type == 'INV':    
             
@@ -358,9 +382,17 @@ class AlignmentAnnotatorIllumina:
             
             # Calculate coverage inside the SV body
             for suffix, values in self.bin_dict_body.items():
+                variants_before = len(self.df_calls_annot)
                 self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, values[0], values[1], values[2], values[3], values[4], suffix, check_len=True)
+                variants_after = len(self.df_calls_annot)
+                excluded = variants_before - variants_after
+                elapsed = time.time() - start_coverage_time
+                #self._log(f'  Body {suffix}: {variants_before:>4d} → {variants_after:>4d} vars ({excluded:>3d} excl), elapsed {elapsed:>6.1f}s', level='BIN')
                 
             self.df_calls_annot.drop(['body_I', 'body_II', 'body_III'], axis=1, inplace=True)
+
+        total_elapsed = time.time() - start_coverage_time
+        self._log(f'DONE: {len(self.df_calls_annot)} variants remaining after coverage filtering (total {total_elapsed:.1f}s)', level='DONE')
             
             
     def get_overlap(self, a: tuple, b: tuple) -> int:
@@ -507,8 +539,21 @@ class AlignmentAnnotatorIllumina:
         labels_disco_conn = list(labels_disco_conn.flatten())
         
         # Iterate over reads in region
+        reads_fetched = 0
         for read in self.bam.fetch(chrom, start - 20, end + 20):
             
+            reads_fetched += 1
+            # for regions exceeding the max fetch reads, reset all counts and break
+            # these regions are highly repetitive and cannot be properly scored anyways
+            if reads_fetched > self.max_fetch_reads:
+                all_reads = 0
+                all_reads_extended_ids = set()
+                split_reads_conn[:] = 0
+                disco_ff_conn[:] = 0
+                disco_rr_conn[:] = 0
+                disco_rf_conn[:] = 0
+                break
+
             if not read.is_unmapped and not read.is_duplicate and not read.is_qcfail:
                 
                 # Only consider reads that overlap with the region for which we want to calculate the features
@@ -661,8 +706,11 @@ class AlignmentAnnotatorIllumina:
     def annotate_read_based_features(self):
         """ Annotates SVs with read-based features for all bins around the SV breakpoints. """
         
+        self._log(f'Starting read-based feature annotation: {len(self.df_calls_annot)} variants')
+        start_total = time.time()
+
         for suffix, values in self.bin_dict_bps.items():
-            #tqdm.pandas(desc=' '.join(['Annotation Reads:', self.log_message, suffix]), position=0, leave=True)
+            start_bin = time.time()
             read_based_features = [feature + suffix for feature in self.features_breakpoints[2:]]
             connection_features = [feature + suffix + '_' + conn for feature in self.features_connection for conn in self.bin_connections[suffix]]
             self.df_calls_annot.loc[:, read_based_features + connection_features] = self.df_calls_annot.apply(lambda x: self.calculate_read_based_features(x[values[0]], 
@@ -671,8 +719,11 @@ class AlignmentAnnotatorIllumina:
                                                                                                                                 x['start'],
                                                                                                                                 x['end'],
                                                                                                                                 suffix), axis=1, result_type ='expand')
-                        
-             
+            self._log(f'  Bin {suffix} DONE: {len(self.df_calls_annot)} variants in {time.time() - start_bin:>7.1f}s', level='BIN')
+
+        self._log(f'DONE: Read-based feature annotation completed in {time.time() - start_total:.1f}s', level='DONE')
+
+     
     def aggregate_results(self):
         """ Cleans up result DataFrame. """        
             

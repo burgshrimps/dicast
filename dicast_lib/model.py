@@ -17,7 +17,7 @@ class Dicast:
         """ Initialize Dicast object. """
         
         self.sv_type = sv_type
-        self.cov_thr = 5 # Log2 threshold were feature collection was aborted
+        self.cov_thr = 3 # Log2 threshold were feature collection was aborted
         
         # Determine complete set of features
         self.features_var = ['sv_len']
