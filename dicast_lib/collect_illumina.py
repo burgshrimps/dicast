@@ -278,14 +278,26 @@ class AlignmentAnnotatorIllumina:
             pd.Series: Series containing mean and std coverage
         """        
 
-        # Initialize a list to store coverage values
-        coverage = [0] * (stop - start + 1)
-        
-        # Iterate over the pileup columns for the specified region
-        for pileupcolumn in self.bam.pileup(chrom, start, stop, min_mapping_quality=20, flag_filter=1540, stepper='samtools', ignore_orphans=False, ignore_overlaps=False):
-            
-            if start <= pileupcolumn.pos <= stop:
-                coverage[pileupcolumn.pos - start] = pileupcolumn.nsegments
+        # Fetch + cumulative sum replacement for pileup
+        # We basically retrieve all reads overlapping the region
+        # and clip their start and end position to the regions exact interval
+        # Then count read "starts" and "ends" and use the cumulative sum to get the coverage
+        self._log(f'Calculating coverage for type {self.sv_type}_{suffix}:{chrom}:{start}-{stop}')
+        n = stop - start + 1
+        rs_list: list = []
+        re_list: list = []
+        for _read in self.bam.fetch(chrom, start, stop):
+            if not (_read.flag & 1540) and _read.mapping_quality >= 20:
+                rs_list.append(_read.reference_start)
+                re_list.append(_read.reference_end)
+        if rs_list:
+            _rs = np.clip(np.array(rs_list, dtype=np.int32) - start, 0, n)
+            _re = np.clip(np.array(re_list, dtype=np.int32) - start, 0, n)
+            _delta = np.bincount(_rs, minlength=n + 1).astype(np.int32)
+            _delta -= np.bincount(_re, minlength=n + 1).astype(np.int32)
+            coverage = np.cumsum(_delta)[:n].tolist()
+        else:
+            coverage = [0] * n
                 
         coverage_mean = np.round(np.log2((np.mean(coverage) + 0.1) / (self.baseline_coverage_mean + 0.1)), 3)
         coverage_std = np.round(np.log2((np.std(coverage) + 0.1) / (self.baseline_coverage_std + 0.1)), 3)
@@ -312,6 +324,7 @@ class AlignmentAnnotatorIllumina:
         i = 0
         all_exclude_idx = []
         #pbar = tqdm(total=len(df), desc=' '.join(['Annotation Coverage:', self.log_message, suffix]), position=0, leave=True)
+        coverage_dict = {}
         
         while i < len(df):
             
@@ -340,8 +353,13 @@ class AlignmentAnnotatorIllumina:
             else:       
                 left_border = df.loc[i, pos_col_left] + offset_left
                 right_border = df.loc[i, pos_col_right] + offset_right
-               
-                df.loc[i, ['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix]] = self.calculate_coverage_region(df.loc[i, chrom_col], left_border, right_border, suffix)
+
+                # the use of a coverage dictionary is mainly for BNDs that share the exact same breakpoint hotspots
+                if f'{df.loc[i, chrom_col]}_{left_border}_{right_border}' in coverage_dict:
+                    df.loc[i, ['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix]] = coverage_dict[f'{df.loc[i, chrom_col]}_{left_border}_{right_border}']
+                else:
+                    df.loc[i, ['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix]] = self.calculate_coverage_region(df.loc[i, chrom_col], left_border, right_border, suffix)
+                    coverage_dict[f'{df.loc[i, chrom_col]}_{left_border}_{right_border}'] = df.loc[i, ['ill_cov_mean_' + suffix, 'ill_cov_std_' + suffix]]
                 step_size, exclude_idx = self.jump_to_next_variant_for_coverage_calculation(df, i, pos_col_left, pos_col_right, offset_left, offset_right, suffix)
                 i += step_size
                 all_exclude_idx += exclude_idx
@@ -767,4 +785,4 @@ class AlignmentAnnotatorIllumina:
         
         return self.df_calls_annot
         
-    
+
