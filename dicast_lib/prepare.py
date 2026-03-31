@@ -101,7 +101,7 @@ class VariantPrep:
                 self.df_variants = df.copy()
                 
 
-    def check_out_of_bounds(self, svtype: str, chrom: str, chrom_2: str, start: int, end: int, chrom_sizes: pd.DataFrame, padding: int=50) -> bool:
+    def check_out_of_bounds(self, svtype: str, chrom: str, chrom_2: str, start: int, end: int, chrom_sizes: pd.DataFrame, padding: int=100) -> bool:
         """ Checks if variant is out of chromosome bounds.
 
         Args:
@@ -111,7 +111,7 @@ class VariantPrep:
             start (int): Start position
             end (int): End position
             chrom_sizes (pd.DataFrame): Dataframe with chromosome sizes
-            padding (int, optional): Padding around SV borders. Defaults to 50.
+            padding (int, optional): Padding around SV borders. Defaults to 100.
 
         Returns:
             bool: True if variant is out of bounds, False otherwise
