@@ -1,0 +1,5 @@
+.DS_Store
+
+# Annotation files over GitHub's 100MB limit (see annot/README.md for sources)
+annot/hg38_gc_content.bw
+annot/hg38_repeatmasker.tsv

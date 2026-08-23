@@ -1,0 +1,390 @@
+import pandas as pd 
+import xgboost as xgb
+import pickle
+import json
+import datetime
+import numpy as np
+#import shap
+import yaml
+from packaging import version
+
+
+
+class Dicast:
+    """ Structural variant detection from short-read sequencing data. """
+
+    def __init__(self, sv_type: str, feature_config_file: str=None):
+        """ Initialize Dicast object. """
+        
+        self.sv_type = sv_type
+        self.cov_thr = 5 # Log2 threshold were feature collection was aborted
+        
+        # Determine complete set of features
+        self.features_var = ['sv_len']
+        self.features_ref = ['rep_LINE', 'rep_SINE', 'rep_LTR', 'rep_DNA', 'rep_Simple_repeat', 'rep_Satellite', 'rep_Low_complexity',
+                             'rep_Retroposon', 'rep_snRNA', 'rep_tRNA', 'rep_srpRNA', 'rep_rRNA','rep_RC', 'rep_scRNA', 'rep_RNA', 'rep_VNTR', 
+                             'rep_STR', 'cpg_islands', 'centromeres', 'asmb_gaps', 'alt_haps', 'GC_content_left', 'GC_content_right']
+        self.features_aln_bp = {'DEL': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_disco_tx'],
+                                'INS': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_disco_tx'],
+                                'INV': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_disco_tx'],
+                                'DUP': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_disco_tx'],
+                                'BND': ['ill_cov_mean', 'ill_cov_std', 'ill_isize_mean', 'ill_isize_std', 'ill_mapq_mean', 'ill_mapq_std',
+                                        'ill_clipreads', 'ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf', 'ill_disco_tx']}
+        self.features_aln_body = {'DEL': ['ill_cov_mean', 'ill_cov_std'],
+                                  'INS': [],
+                                  'INV': ['ill_cov_mean', 'ill_cov_std'],
+                                  'DUP': ['ill_cov_mean', 'ill_cov_std'],
+                                  'BND': []}
+        self.features_aln_conn = {'DEL': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                  'INS': [],
+                                  'INV': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                  'DUP': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf'],
+                                  'BND': ['ill_splitreads', 'ill_disco_ff', 'ill_disco_rr', 'ill_disco_rf']}
+        
+        # Load feature config
+        if feature_config_file is not None:
+            with open(feature_config_file, 'r') as f:
+                self.feature_config = yaml.safe_load(f)
+        
+        # Filter and create variant features
+        if feature_config_file is not None:
+            filtered_features = []
+            for feature in self.features_var:
+                if self.feature_config['variant'][feature] == 1:
+                    filtered_features.append(feature)
+            self.features_var = filtered_features
+
+        # Filter and create reference features
+        if feature_config_file is not None:
+            filtered_features = []
+            for feature in self.features_ref:
+                if self.feature_config['reference'][feature] == 1:
+                    filtered_features.append(feature)
+            self.features_ref = filtered_features
+
+        # Filter alignment features
+        if feature_config_file is not None:
+            filtered_features = []
+            for feature in self.features_aln_bp[self.sv_type]:
+                if self.feature_config['alignment'][feature] == 1:
+                    filtered_features.append(feature)
+            self.features_aln_bp[self.sv_type] = filtered_features
+
+        # Filter alignment body features
+        if feature_config_file is not None:
+            filtered_features = []
+            for feature in self.features_aln_body[self.sv_type]:
+                if self.feature_config['alignment_body'][feature] == 1:
+                    filtered_features.append(feature)
+            self.features_aln_body[self.sv_type] = filtered_features
+
+        # Filter alignment connection features
+        if feature_config_file is not None:
+            filtered_features = []
+            for feature in self.features_aln_conn[self.sv_type]:
+                if self.feature_config['alignment_conn'][feature] == 1:
+                    filtered_features.append(feature)
+            self.features_aln_conn[self.sv_type] = filtered_features
+                
+        # Create alignment features
+        suffices_bp = ['I', 'II'] if self.sv_type == 'INS' else ['I', 'II', 'III', 'IV'] 
+        suffices_body = [] if self.sv_type == 'INS' or self.sv_type == 'BND' else ['IIa', 'IIb', 'IIIb', 'IIIa']
+        bin_connections = {'I' : ['II', 'III', 'IV'],
+                           'II' : ['III', 'IV'],
+                           'III' : ['IV'],
+                           'IV' : []}
+        
+        self.features_aln = [aln_feature + '_' + suffix for aln_feature in self.features_aln_bp[self.sv_type] for suffix in suffices_bp]
+        self.features_aln += [aln_feature + '_' + suffix for aln_feature in self.features_aln_body[self.sv_type] for suffix in suffices_body]
+        for feature in self.features_aln_conn[self.sv_type]:
+            for suffix in suffices_bp:
+                for suffix2 in bin_connections[suffix]:
+                    self.features_aln.append(feature + '_' + suffix + '_' + suffix2)
+
+        # Create complete set of features
+        self.features = self.features_var + self.features_ref + self.features_aln
+        
+    
+    def load_from_df(self, df_variants: pd.DataFrame):
+        """ Load variants from dataframe.
+
+        Args:
+            df_variants (pd.DataFrame): Dataframe containing variants with features
+        """        
+        
+        self.variants = df_variants[df_variants['sv_type'] == self.sv_type].copy().reset_index(drop=True)
+        
+        
+    def load_from_csv(self, variant_filename: str):
+    
+        self.variants = pd.read_csv(variant_filename, sep='\t', low_memory=False)
+        self.variants = self.variants[self.variants['sv_type'] == self.sv_type].copy().reset_index(drop=True)
+        
+        
+    def impute_missing_values(self):
+        """ Impute missing values. """
+
+        # Impute GC Content
+        self.variants['GC_content_left'] = self.variants['GC_content_left'].fillna(self.variants['GC_content_left'].median())
+        self.variants['GC_content_right'] = self.variants['GC_content_right'].fillna(self.variants['GC_content_right'].median())
+
+        # Impute coverage, was set to NA during feature extraction process if coverage exceeded threshold
+        self.variants['ill_cov_mean_I'] = self.variants['ill_cov_mean_I'].fillna(self.cov_thr)
+        self.variants['ill_cov_mean_II'] = self.variants['ill_cov_mean_II'].fillna(self.cov_thr)
+        self.variants['ill_cov_std_I'] = self.variants['ill_cov_std_I'].fillna(1)
+        self.variants['ill_cov_std_II'] = self.variants['ill_cov_std_II'].fillna(1)
+        
+        if self.sv_type != 'INS':
+            self.variants['ill_cov_mean_III'] = self.variants['ill_cov_mean_III'].fillna(self.cov_thr)
+            self.variants['ill_cov_mean_IV'] = self.variants['ill_cov_mean_IV'].fillna(self.cov_thr)
+            self.variants['ill_cov_std_III'] = self.variants['ill_cov_std_III'].fillna(1)
+            self.variants['ill_cov_std_IV'] = self.variants['ill_cov_std_IV'].fillna(1)
+            
+            
+    def train(self, model_type: str, model_params: dict, chroms: list=[]):
+        """ Train model.
+
+        Args:
+            model_type (str): Type of model to train
+            model_params (dict): Parameters for model
+            chroms (list, optional): List of chromosomes to use for training. Defaults to [].
+        """           
+        
+        self.chroms_train = chroms
+        self.model_type = model_type
+        self.model_params = model_params
+        
+        # Subset variants to chromosomes used for training
+        if len(self.chroms_train) > 0:
+            self.variants_train = self.variants[self.variants['chrom'].isin(self.chroms_train)].copy().reset_index(drop=True)
+        else:
+            self.variants_train = self.variants.copy()
+        
+        # Train model
+        X = self.variants_train[self.features]
+        y = self.variants_train['confirmation_status']
+        
+        if model_type == 'XGBoost':
+            self.model = xgb.XGBClassifier(**self.model_params)
+            self.model.fit(X, y)
+            
+            
+    def predict(self, chroms: list=[]):
+        """ Make predictions for variants.
+
+        Args:
+            chroms (list, optional): List of chromosomes to use for predicting. Defaults to [].
+        """        
+        
+        self.chroms_predict = chroms
+        
+        # Subset variants to chromosomes used for prediction
+        if len(self.chroms_predict) > 0:
+            self.variants_predict = self.variants[self.variants['chrom'].isin(self.chroms_predict)].copy().reset_index(drop=True)
+        else:
+            self.variants_predict = self.variants.copy()
+            
+        # Predict
+        # compatability for version 1.7.4
+        # checks if the n_classes_ attribute is present in the model
+        if not hasattr(self.model, 'n_classes_'):
+            self.model.n_classes_ = 2
+
+        if self.variants_predict.shape[0] > 0:
+            X = self.variants_predict[self.features]
+            self.variants_predict['dicast_qual'] = np.round(self.model.predict_proba(X)[:, 1], 3)
+        else:
+            self.variants_predict['dicast_qual'] = np.nan
+            
+            
+    def score_inversions(self, chroms: list=[]):
+        
+        self.chroms_predict = chroms
+        
+        # Subset variants to chromosomes used for prediction
+        if len(self.chroms_predict) > 0:
+            self.variants_predict = self.variants[self.variants['chrom'].isin(self.chroms_predict)].copy().reset_index(drop=True)
+        else:
+            self.variants_predict = self.variants.copy()
+            
+        # Predict
+        if self.variants_predict.shape[0] > 0:
+            
+            columns_clipped = ['ill_clipreads_I', 'ill_clipreads_II', 'ill_clipreads_III', 'ill_clipreads_IV']
+            mask_clipped = (self.variants_predict[columns_clipped] > 0.2).sum(axis=1) >= 3 
+
+            columns_disco = ['ill_disco_ff_I', 'ill_disco_ff_II', 'ill_disco_ff_III', 'ill_disco_ff_IV', 'ill_disco_rr_I', 'ill_disco_rr_II', 'ill_disco_rr_III', 'ill_disco_rr_IV']
+            mask_disco_relax = (self.variants_predict[columns_disco] > 0.1).sum(axis=1) >= 3
+            mask_disco_strict = (self.variants_predict[columns_disco] > 0.2).sum(axis=1) >= 2
+
+            columns_cov = ['ill_cov_mean_I', 'ill_cov_mean_II', 'ill_cov_mean_III', 'ill_cov_mean_IV']
+            mask_cov = (self.variants_predict[columns_cov] <= 3.5).all(axis=1)
+
+            mask_len = (self.variants_predict['sv_len'] < 3000000)
+            
+            self.variants_predict['dicast_qual'] = 0
+            self.variants_predict.loc[mask_clipped & mask_disco_relax & mask_disco_strict & mask_cov & mask_len, 'dicast_qual'] = 1
+            
+        else:
+            self.variants_predict['dicast_qual'] = np.nan
+            
+            
+    def score_translocations(self, chroms: list=[]):
+        
+        self.chroms_predict = chroms
+        
+        # Subset variants to chromosomes used for prediction
+        if len(self.chroms_predict) > 0:
+            self.variants_predict = self.variants[self.variants['chrom'].isin(self.chroms_predict)].copy().reset_index(drop=True)
+        else:
+            self.variants_predict = self.variants.copy()
+            
+        # Predict
+        if self.variants_predict.shape[0] > 0:
+            
+            columns_clipped = ['ill_clipreads_I', 'ill_clipreads_II', 'ill_clipreads_III', 'ill_clipreads_IV']
+            mask_clipped = (self.variants_predict[columns_clipped] > 0.2).sum(axis=1) >= 2
+            
+            columns_cov = ['ill_cov_mean_I', 'ill_cov_mean_II', 'ill_cov_mean_III', 'ill_cov_mean_IV']
+            mask_cov = (self.variants_predict[columns_cov] <= 3).all(axis=1)
+            
+            columns_disco_inv = ['ill_disco_ff_I', 'ill_disco_ff_II', 'ill_disco_ff_III', 'ill_disco_ff_IV', 'ill_disco_rr_I', 'ill_disco_rr_II', 'ill_disco_rr_III', 'ill_disco_rr_IV']
+            columns_disco_dup = ['ill_disco_rf_I', 'ill_disco_rf_II', 'ill_disco_rf_III', 'ill_disco_rf_IV']
+            columns_disco_tra = ['ill_disco_tx_I', 'ill_disco_tx_II', 'ill_disco_tx_III', 'ill_disco_tx_IV']
+            mask_disco_inv = (self.variants_predict[columns_disco_inv] > 0.2).sum(axis=1) >= 2
+            mask_disco_dup = (self.variants_predict[columns_disco_dup] > 0.3).sum(axis=1) >= 2
+            mask_disco_tra = (self.variants_predict[columns_disco_tra] > 0.3).sum(axis=1) >= 2
+            
+            columns_mapq = ['ill_mapq_mean_I', 'ill_mapq_mean_II', 'ill_mapq_mean_III', 'ill_mapq_mean_IV']
+            mask_mapq = (self.variants_predict[columns_mapq] >= -0.5).all(axis=1)
+            
+            columns_split = ['ill_splitreads_I', 'ill_splitreads_II', 'ill_splitreads_III', 'ill_splitreads_IV']
+            mask_split = (self.variants_predict[columns_split] > 0.1).sum(axis=1) >= 2
+            
+            self.variants_predict['dicast_qual'] = 0
+            self.variants_predict.loc[mask_clipped & mask_cov & (mask_disco_inv | mask_disco_dup | mask_disco_tra) & mask_mapq & mask_split, 'dicast_qual'] = 1
+            
+        else:
+            self.variants_predict['dicast_qual'] = np.nan
+        
+        
+    def save(self, model_filename: str):
+        """ Save model to file.
+
+        Args:
+            model_filename (str): Filename to save the model to, must end with .pkl
+        """        
+        
+        # Save model
+        self.model.save_model(model_filename)
+        
+        #with open(model_filename, 'wb') as f:
+        #    pickle.dump(self.model, f)
+            
+        # Save model metadata
+        meta_filename = model_filename.replace('.json', '_metadata.json')
+        meta = {'date' : datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'model_type': self.model_type,
+                'model_params': self.model_params,
+                'features': self.features,
+                'sv_type': self.sv_type,
+                'reference': self.variants['reference'].unique().tolist()[0],
+                'cohorts': self.variants['cohort'].unique().tolist(),
+                'samples': self.variants['sample'].unique().tolist(),
+                'callers': self.variants['caller'].unique().tolist(),
+                'chroms_train': self.chroms_train,
+                'number_variants': self.variants.shape[0],
+                'number_variants_positive': self.variants[self.variants['confirmation_status'] == 1].shape[0],
+                'number_variants_negative': self.variants[self.variants['confirmation_status'] == 0].shape[0]}
+        json_object = json.dumps(meta, indent=4)
+        with open(meta_filename, 'w') as f:
+            f.write(json_object)
+            
+            
+    def load(self, model_filename: str):
+        """ Load model from file.
+
+        Args:
+            model_filename (str): Filename to load the model from, must end with .json
+        """        
+        
+        #self.model = xgb.XGBClassifier()
+        #self.model.load_model(model_filename)
+
+        self.model = xgb.XGBClassifier()
+        self.model._Booster = xgb.Booster()
+        self.model._Booster.load_model(model_filename)
+            
+            
+    def to_db(self) -> pd.DataFrame:
+        """ Get predictions for variants.
+
+        Returns:
+            pd.DataFrame: Dataframe containing variants with predictions
+        """        
+        
+        columns_for_export = ['single_id', 'merged_id', 'caller_id', 'cohort', 'sample', 'reference', 'technology', 'caller', 'sv_type', 
+                              'chrom', 'chrom_2', 'start', 'end', 'sv_len', 'filter', 'caller_qual', 'dicast_qual', 'genotype',
+                              'performed_confirmation', 'confirmation_status', 'performed_curation', 'curation_status']
+        return self.variants_predict[columns_for_export]
+    
+    
+    def to_df(self) -> pd.DataFrame:
+        """ Get predictions for variants.
+
+        Returns:
+            pd.DataFrame: Dataframe containing variants with predictions
+        """        
+        
+        columns_for_export = ['id', 'cohort', 'sample', 'reference', 'technology', 'caller', 'sv_type', 
+                              'chrom', 'chrom_2', 'start', 'end', 'sv_len', 'filter', 'qual', 'dicast_qual', 'genotype']
+        return self.variants_predict[columns_for_export]
+    
+
+    def get_feature_importance(self) -> pd.DataFrame:
+        """Get global feature importance from the XGBoost model.
+        
+        Returns:
+            pd.DataFrame: DataFrame containing feature names and their importance scores
+        """
+        importance_dict = {
+            'feature': self.features,
+            'importance': self.model.feature_importances_
+        }
+        importance_df = pd.DataFrame(importance_dict)
+        return importance_df.sort_values('importance', ascending=False)
+
+    # def get_prediction_explanation(self, variant_idx: int = None) -> dict:
+    #     """Get SHAP values explaining a specific prediction or all predictions.
+        
+    #     Args:
+    #         variant_idx (int, optional): Index of variant to explain. 
+    #             If None, returns explanations for all variants.
+        
+    #     Returns:
+    #         dict: Dictionary containing feature contributions
+    #     """
+        
+    #     X = self.variants_predict[self.features]
+    #     explainer = shap.TreeExplainer(self.model)
+    #     shap_values = explainer.shap_values(X)
+        
+    #     if variant_idx is not None:
+    #         # Return explanation for specific variant
+    #         contributions = dict(zip(self.features, shap_values[variant_idx]))
+    #         return {
+    #             'base_value': explainer.expected_value,
+    #             'prediction': self.variants_predict.iloc[variant_idx]['dicast_qual'],
+    #             'feature_contributions': dict(sorted(contributions.items(), key=lambda x: abs(x[1]), reverse=True))
+    #         }
+    #     else:
+    #         # Return all explanations
+    #         return {
+    #             'base_value': explainer.expected_value,
+    #             'shap_values': shap_values,
+    #             'features': self.features
+    #         }

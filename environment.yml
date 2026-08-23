@@ -1,0 +1,30 @@
+name: dicast
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  - xgboost
+  - matplotlib
+  - seaborn
+  - networkx
+  - pyyaml
+  - tqdm
+  - jupyter
+  - ipykernel
+  - pysam
+  - pybedtools
+  - pyBigWig
+  - bioframe
+  - vcfpy
+  - bcftools
+  - tabix
+  - htslib
+  - joblib
+  - upsetplot
+  - umap-learn
