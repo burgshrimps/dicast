@@ -274,58 +274,6 @@ class ReferenceAnnotator:
             self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'alt_haps']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
 
 
-    def annotate_genes(self):
-        """ Annotate the variants with distance to genes (NCBI RefSeq) from the UCSC Genome Browser Track. 
-        """
-
-        # Compute distance between variants and genes
-        df_ref = self.df_genes[['chrom', 'txStart', 'txEnd']].rename(columns={'txStart' : 'start', 'txEnd': 'end'}).copy()
-
-        # Annotate non BNDs
-        df_svs = self.df_calls_annot[['chrom', 'start', 'end', 'id']].copy()
-        if not df_svs.empty:
-            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'genes'})
-            self.df_calls_annot = pd.merge(self.df_calls_annot, df_closest[['id_1', 'genes']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
-
-        if self.split_bnd and not self.df_calls_annot_bnd1.empty:
-
-            # Annotate BNDs on first chromosome
-            df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
-            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'genes'})
-            self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'genes']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
-
-            # Annotate BNDs on second chromosome
-            df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
-            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'genes'})
-            self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'genes']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
-
-
-    def annotate_orphanet(self):
-        """ Annotate the variants with distance to orphanet diseases gene associations from the UCSC Genome Browser Track. 
-        """
-
-        # Compute distance between variants and orphanet disease gene associations
-        df_ref = self.df_orphanet[['#chrom', 'chromStart', 'chromEnd']].rename(columns={'#chrom': 'chrom', 'chromStart' : 'start', 'chromEnd': 'end'}).copy()
-
-        # Annotate non BNDs
-        df_svs = self.df_calls_annot[['chrom', 'start', 'end', 'id']].copy()
-        if not df_svs.empty:
-            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'orphanet'})
-            self.df_calls_annot = pd.merge(self.df_calls_annot, df_closest[['id_1', 'orphanet']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
-
-        if self.split_bnd and not self.df_calls_annot_bnd1.empty:
-
-            # Annotate BNDs on first chromosome
-            df_svs = self.df_calls_annot_bnd1[['chrom', 'start', 'end', 'id']].copy()
-            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'orphanet'})
-            self.df_calls_annot_bnd1 = pd.merge(self.df_calls_annot_bnd1, df_closest[['id_1', 'orphanet']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
-
-            # Annotate BNDs on second chromosome
-            df_svs = self.df_calls_annot_bnd2[['chrom', 'start', 'end', 'id']].copy()
-            df_closest = bf.closest(df_svs, df_ref, return_overlap=True, suffixes=['_1', '_2']).rename(columns={'distance': 'orphanet'})
-            self.df_calls_annot_bnd2 = pd.merge(self.df_calls_annot_bnd2, df_closest[['id_1', 'orphanet']], how='left', left_on='id', right_on='id_1').drop(columns=['id_1'])
-
-
     def calculate_gc_content(self, row: pd.Series, region: str) -> float:
         """ Calculate GC content of a region.
 
@@ -339,7 +287,7 @@ class ReferenceAnnotator:
 
         try:
             return self.bw_gc.stats(row['chrom'], row[region] - 50, row[region] + 50)[0]
-        except:
+        except Exception:
             return np.nan
 
         
@@ -378,9 +326,9 @@ class ReferenceAnnotator:
 
             df_calls_annot_bnd = pd.concat([self.df_calls_annot_bnd1, self.df_calls_annot_bnd2], ignore_index=True)
             df_calls_annot_bnd = df_calls_annot_bnd.groupby('id').agg({'cohort' : 'first', 'sample' : 'first', 'reference' : 'first', 'technology' : 'first', 'caller' : 'first', 'sv_type' : 'first', 'chrom' : 'first', 'chrom_2' : 'last', 'start' : 'first', 'end' : 'last',
-                                                                    'rep_LINE' : min, 'rep_SINE' : min, 'rep_LTR' : min, 'rep_DNA' : min, 'rep_Simple_repeat' : min, 'rep_Satellite' : min, 'rep_Low_complexity' : min, 
-                                                                    'rep_Retroposon' : min, 'rep_snRNA' : min, 'rep_tRNA' : min, 'rep_srpRNA' : min, 'rep_rRNA' : min, 'rep_RC' : min, 'rep_scRNA' : min,
-                                                                    'rep_RNA' : min, 'rep_VNTR' : min, 'rep_STR' : min, 'cpg_islands' : min, 'centromeres' : min, 'asmb_gaps' : min, 'alt_haps' : min,
+                                                                    'rep_LINE' : 'min', 'rep_SINE' : 'min', 'rep_LTR' : 'min', 'rep_DNA' : 'min', 'rep_Simple_repeat' : 'min', 'rep_Satellite' : 'min', 'rep_Low_complexity' : 'min', 
+                                                                    'rep_Retroposon' : 'min', 'rep_snRNA' : 'min', 'rep_tRNA' : 'min', 'rep_srpRNA' : 'min', 'rep_rRNA' : 'min', 'rep_RC' : 'min', 'rep_scRNA' : 'min',
+                                                                    'rep_RNA' : 'min', 'rep_VNTR' : 'min', 'rep_STR' : 'min', 'cpg_islands' : 'min', 'centromeres' : 'min', 'asmb_gaps' : 'min', 'alt_haps' : 'min',
                                                                     'GC_content_left' : 'first', 'GC_content_right' : 'first'}).reset_index()
             if not self.df_calls_annot.empty:
                 self.df_calls_annot = pd.concat([self.df_calls_annot, df_calls_annot_bnd[self.df_calls_annot.columns]], ignore_index=True)

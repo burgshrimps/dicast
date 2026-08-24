@@ -1,0 +1,10 @@
+# Test-only dependencies for the dicast unit-test suite.
+#
+# Everything the test suite needs to *import* dicast/dicast_lib at runtime
+# (pysam, pandas, numpy, pyBigWig, bioframe, vcfpy, xgboost, pyyaml, tqdm,
+# joblib, packaging, networkx, matplotlib) already comes from the conda
+# environment (environment.yml / the dicast-verify env). This file adds only
+# the packages that environment itself has no reason to carry: the test
+# runner and its coverage plugin.
+pytest
+pytest-cov

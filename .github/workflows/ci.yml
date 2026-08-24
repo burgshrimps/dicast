@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up micromamba environment
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: environment.yml
+          cache-environment: true
+
+      - name: Install test-only dependencies
+        shell: bash -el {0}
+        run: pip install -r tests/requirements-test.txt
+
+      - name: Import-check every dicast_lib module
+        shell: bash -el {0}
+        run: |
+          python3 -c "
+          import dicast_lib.parsing
+          import dicast_lib.prepare
+          import dicast_lib.collect_illumina
+          import dicast_lib.collect_reference
+          import dicast_lib.model
+          import dicast_lib.multi
+          import dicast_lib.utils
+          print('dicast_lib: all modules imported OK')
+          "
+
+      - name: CLI help sanity checks
+        shell: bash -el {0}
+        run: |
+          python3 dicast.py --help
+          python3 dicast.py call --help
+          python3 dicast.py multi --help
+
+      - name: Run test suite
+        shell: bash -el {0}
+        run: python3 -m pytest tests/ -q
+
+      - name: Demo end-to-end run
+        shell: bash -el {0}
+        run: |
+          python3 dicast.py call \
+            --sample demo \
+            --workdir demo_out \
+            --fai test_data/hg38.fa.fai \
+            --bam test_data/demo.bam \
+            --vcfs delly=test_data/demo_delly.vcf.gz \
+            --annot-dir test_data/annot \
+            --chrom chr21 \
+            --sv_types DEL INS \
+            --threads 2
+
+      - name: Check demo output
+        shell: bash -el {0}
+        run: |
+          test -f demo_out/demo_hg38.SVs.dicast.tsv
+          rows=$(($(wc -l < demo_out/demo_hg38.SVs.dicast.tsv) - 1))
+          echo "Data rows: $rows"
+          if [ "$rows" -ne 20 ]; then
+            echo "Expected 20 data rows, got $rows"
+            exit 1
+          fi

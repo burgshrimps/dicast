@@ -63,14 +63,7 @@ cd "${DICAST_DIR}"
         --technology ill \
         --workdir "${WORKDIR}" \
         --fai "${REF_FAI}" \
-        --repeats     "${ANNOT_DIR}/hg38_repeatmasker.tsv" \
-        --cgis        "${ANNOT_DIR}/hg38_cpg_islands.tsv" \
-        --centromeres "${ANNOT_DIR}/hg38_centromeres.tsv" \
-        --gaps        "${ANNOT_DIR}/hg38_asmb_gaps.tsv" \
-        --althaps     "${ANNOT_DIR}/hg38_alt_haps.tsv" \
-        --vntrs       "${ANNOT_DIR}/hg38_vntrs_chaisson.bed" \
-        --strs        "${ANNOT_DIR}/hg38_strs_chaisson.bed" \
-        --gc          "${ANNOT_DIR}/hg38_gc_content.bw" \
+        --annot-dir "${ANNOT_DIR}" \
         --bam "${BAM}" \
         --vcfs delly=${VCF_DIR}/delly/formatted_variants.vcf.gz \
                manta=${VCF_DIR}/manta/formatted_variants.vcf.gz \

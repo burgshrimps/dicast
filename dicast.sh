@@ -13,11 +13,12 @@ REF=${REF:-hg38}
 TECH=${TECH:-ill}
 WORKDIR=${WORKDIR:-./workdir}
 
-# Reference FASTA index (provide your own); annotations ship in ./annot.
+# Reference FASTA index (provide your own); annotations ship in ./annot and
+# are picked up automatically from there (override with ANNOT_DIR if needed).
 DICAST_DIR=${DICAST_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}
 REF_DIR=${REF_DIR:-/path/to/reference/hg38}
 FAI=${FAI:-${REF_DIR}/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.fai}
-ANNOT=${ANNOT:-${DICAST_DIR}/annot}
+ANNOT_DIR=${ANNOT_DIR:-${DICAST_DIR}/annot}
 
 # Aligned BAM + per-caller VCFs.
 BAM=${BAM:-/path/to/aligned/${SAMPLE}.bam}
@@ -35,14 +36,7 @@ python3 dicast.py call \
     --technology "${TECH}" \
     --workdir "${WORKDIR}" \
     --fai "${FAI}" \
-    --repeats     "${ANNOT}/hg38_repeatmasker.tsv" \
-    --cgis        "${ANNOT}/hg38_cpg_islands.tsv" \
-    --centromeres "${ANNOT}/hg38_centromeres.tsv" \
-    --gaps        "${ANNOT}/hg38_asmb_gaps.tsv" \
-    --althaps     "${ANNOT}/hg38_alt_haps.tsv" \
-    --vntrs       "${ANNOT}/hg38_vntrs_chaisson.bed" \
-    --strs        "${ANNOT}/hg38_strs_chaisson.bed" \
-    --gc          "${ANNOT}/hg38_gc_content.bw" \
+    --annot-dir "${ANNOT_DIR}" \
     --bam "${BAM}" \
     --vcfs delly=${VCF_DIR}/delly/formatted_variants.vcf.gz \
            manta=${VCF_DIR}/manta/formatted_variants.vcf.gz \

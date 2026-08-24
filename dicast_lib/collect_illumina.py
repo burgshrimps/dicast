@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import re
+import time
+import logging
 
 from dicast_lib.utils import mad
 
@@ -64,13 +66,19 @@ class AlignmentAnnotatorIllumina:
                                 'III' : ['chrom_2', 'end', 'end', -52, -2],
                                 'IV' : ['chrom_2', 'end', 'end', 2, 52]}
         
-        # Define connections between bins    
+        # Define connections between bins
         self.bin_connections = {'I' : ['II', 'III', 'IV'],
                                 'II' : ['III', 'IV'],
                                 'III' : ['IV'],
                                 'IV' : []}
-        
-        
+
+
+    def _log(self, msg: str, level: str = 'INFO'):
+        """ Logs a progress message for this sample/chrom/sv_type job. """
+
+        logging.info(f'[{self.sample}_{self.chrom}_{self.sv_type}] {level}: {msg}')
+
+
     def prepare_dataframe(self):
         """ Prepares DataFrame for SV annotation. """
         
@@ -139,7 +147,8 @@ class AlignmentAnnotatorIllumina:
         self.baseline_coverage_std = 0
         baseline_coverage_mean = []
         baseline_coverage_std = []
-        
+
+        np.random.seed(42)
         for i in range(n):
             if len(self.bam.lengths)>1:
                 start = np.random.randint(0, self.bam.lengths[chrom_idx])
@@ -177,11 +186,12 @@ class AlignmentAnnotatorIllumina:
         else:
             chrom_idx = int(self.chrom[3:]) - 1
         insert_sizes = []
+        np.random.seed(42)
         for i in range(n):
             if len(self.bam.lengths)>1:
                 start = np.random.randint(0, self.bam.lengths[chrom_idx])
             else:
-                start = np.random.randint(0, self.bam.lengths[0]) 
+                start = np.random.randint(0, self.bam.lengths[0])
             stop = start + s
             for read in self.bam.fetch(self.chrom, start, stop):
                 if not read.is_unmapped and not read.mate_is_unmapped:
@@ -209,11 +219,12 @@ class AlignmentAnnotatorIllumina:
             chrom_idx = int(self.chrom[3:]) - 1
         mapqs = []
 
+        np.random.seed(42)
         for i in range(n):
             if len(self.bam.lengths)>1:
                 start = np.random.randint(0, self.bam.lengths[chrom_idx])
             else:
-                start = np.random.randint(0, self.bam.lengths[0]) 
+                start = np.random.randint(0, self.bam.lengths[0])
             stop = start + s
             for read in self.bam.fetch(self.chrom, start, stop):
                 if not read.is_unmapped:
@@ -363,24 +374,30 @@ class AlignmentAnnotatorIllumina:
             
         
     def annotate_coverage(self):
-        """ Annotates SVs with mean and std coverage for all bins around the SV breakpoints. """        
-        
+        """ Annotates SVs with mean and std coverage for all bins around the SV breakpoints. """
+
+        self._log(f'Starting coverage annotation: {len(self.df_calls_annot)} variants')
+        start_coverage_time = time.time()
+
         # Calculate coverage around breakpoints
         for suffix, values in self.bin_dict_bps.items():
             self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, values[0], values[1], values[2], values[3], values[4], suffix)
-            
-        if self.sv_type == 'DEL' or self.sv_type == 'DUP' or self.sv_type == 'INV':    
-            
+
+        if self.sv_type == 'DEL' or self.sv_type == 'DUP' or self.sv_type == 'INV':
+
             # Generate borders for bins inside the SV body
             self.df_calls_annot.loc[:, ['body_I', 'body_II', 'body_III']] = self.df_calls_annot.apply(lambda x: self.divide_sv_body(x['start'] + 52, x['end'] - 52), axis=1, result_type ='expand')
-            
+
             # Calculate coverage inside the SV body
             for suffix, values in self.bin_dict_body.items():
                 self.df_calls_annot = self.calculate_coverage(self.df_calls_annot, values[0], values[1], values[2], values[3], values[4], suffix, check_len=True)
-                
+
             self.df_calls_annot.drop(['body_I', 'body_II', 'body_III'], axis=1, inplace=True)
-            
-            
+
+        total_elapsed = time.time() - start_coverage_time
+        self._log(f'DONE: {len(self.df_calls_annot)} variants remaining after coverage filtering (total {total_elapsed:.1f}s)', level='DONE')
+
+
     def get_overlap(self, a: tuple, b: tuple) -> int:
         """ Calculates the overlap between two intervals.
 
@@ -691,19 +708,26 @@ class AlignmentAnnotatorIllumina:
         
     def annotate_read_based_features(self):
         """ Annotates SVs with read-based features for all bins around the SV breakpoints. """
-        
+
+        self._log(f'Starting read-based feature annotation: {len(self.df_calls_annot)} variants')
+        start_total = time.time()
+
         for suffix, values in self.bin_dict_bps.items():
+            start_bin = time.time()
             #tqdm.pandas(desc=' '.join(['Annotation Reads:', self.log_message, suffix]), position=0, leave=True)
             read_based_features = [feature + suffix for feature in self.features_breakpoints[2:]]
             connection_features = [feature + suffix + '_' + conn for feature in self.features_connection for conn in self.bin_connections[suffix]]
-            self.df_calls_annot.loc[:, read_based_features + connection_features] = self.df_calls_annot.apply(lambda x: self.calculate_read_based_features(x[values[0]], 
-                                                                                                                                x[values[1]] + values[3], 
+            self.df_calls_annot.loc[:, read_based_features + connection_features] = self.df_calls_annot.apply(lambda x: self.calculate_read_based_features(x[values[0]],
+                                                                                                                                x[values[1]] + values[3],
                                                                                                                                 x[values[2]] + values[4],
                                                                                                                                 x['start'],
                                                                                                                                 x['end'],
                                                                                                                                 suffix), axis=1, result_type ='expand')
-                        
-             
+            self._log(f'  Bin {suffix} DONE: {len(self.df_calls_annot)} variants in {time.time() - start_bin:>7.1f}s', level='BIN')
+
+        self._log(f'DONE: Read-based feature annotation completed in {time.time() - start_total:.1f}s', level='DONE')
+
+
     def aggregate_results(self):
         """ Cleans up result DataFrame. """        
             

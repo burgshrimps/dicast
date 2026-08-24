@@ -4,27 +4,16 @@ channels:
   - bioconda
 dependencies:
   - python=3.10
-  - pip
   - numpy
   - pandas
-  - scipy
-  - scikit-learn
-  - xgboost
-  - matplotlib
-  - seaborn
-  - networkx
-  - pyyaml
-  - tqdm
-  - jupyter
-  - ipykernel
+  - xgboost>=1.7,<3
   - pysam
-  - pybedtools
   - pyBigWig
   - bioframe
   - vcfpy
-  - bcftools
-  - tabix
-  - htslib
+  - matplotlib
+  - pyyaml
+  - tqdm
   - joblib
-  - upsetplot
-  - umap-learn
+  - packaging
+  - networkx

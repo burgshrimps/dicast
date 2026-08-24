@@ -1,4 +1,9 @@
 .DS_Store
+__pycache__/
+.pytest_cache/
+.coverage
+.coverage.*
+demo_out/
 
 # Annotation files over GitHub's 100MB limit (see annot/README.md for sources)
 annot/hg38_gc_content.bw
