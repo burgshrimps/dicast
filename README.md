@@ -109,6 +109,9 @@ variant, then uses the dicast score to pick one representative variant per
 cluster: essentially a deduplicated set of scored calls based on the input
 VCFs.
 
-To consider a call a true positive, we recommend the following score
-thresholds: 0.45 for deletions, 0.30 for insertions, and 0.40 for
-duplications.
+**To consider a call a true positive, we recommend the following score
+thresholds:**
+
+- **deletions: 0.45**
+- **insertions: 0.30**
+- **duplications: 0.40**
