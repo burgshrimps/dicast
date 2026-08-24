@@ -19,9 +19,13 @@ jobs:
           environment-file: environment.yml
           cache-environment: true
 
-      - name: Install test-only dependencies
+      - name: Install dicast and test-only dependencies
         shell: bash -el {0}
-        run: pip install -r tests/requirements-test.txt
+        # The editable install re-runs even on a cached env, so the dicast
+        # entry point always matches the checked-out code.
+        run: |
+          pip install -e .
+          pip install -r tests/requirements-test.txt
 
       - name: Import-check every dicast module
         shell: bash -el {0}
