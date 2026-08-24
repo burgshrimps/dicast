@@ -40,9 +40,9 @@ jobs:
       - name: CLI help sanity checks
         shell: bash -el {0}
         run: |
-          python3 dicast.py --help
-          python3 dicast.py call --help
-          python3 dicast.py multi --help
+          dicast --help
+          dicast call --help
+          dicast multi --help
 
       - name: Run test suite
         shell: bash -el {0}
@@ -51,7 +51,7 @@ jobs:
       - name: Demo end-to-end run
         shell: bash -el {0}
         run: |
-          python3 dicast.py call \
+          dicast call \
             --sample demo \
             --workdir demo_out \
             --fai test_data/hg38.fa.fai \

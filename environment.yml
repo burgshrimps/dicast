@@ -17,3 +17,9 @@ dependencies:
   - joblib
   - packaging
   - networkx
+  - pip
+  # Installs the `dicast` command into the env (editable, so the repo's
+  # annot/ and models/ defaults keep working). Run `conda env create` from
+  # the repo root.
+  - pip:
+      - -e .

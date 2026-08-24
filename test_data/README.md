@@ -1,6 +1,6 @@
 # test_data — dicast quickstart demo dataset
 
-A small, self-contained chr21-only dataset so `python3 dicast.py call` runs
+A small, self-contained chr21-only dataset so `dicast call` runs
 end-to-end with zero user-supplied inputs (used by CI and by anyone trying
 dicast for the first time). Everything here is derived from public GIAB
 (Genome in a Bottle) HG002 resources — no synthetic reads.
@@ -16,7 +16,7 @@ test_data/
 ## Quickstart
 
 ```
-python3 dicast.py call \
+dicast call \
     --sample demo --workdir demo_out \
     --fai test_data/hg38.fa.fai \
     --bam test_data/demo.bam \
@@ -138,8 +138,8 @@ and sizes were reformatted into a minimal, standard **delly-style** VCF
 `demo` (must match `--sample demo` — `caller_vcf_to_dataframe` looks up
 `rec.samples[sample]['GT']` by that exact name). `delly` was picked as the
 caller label because it's the plainest, most standard SV VCF dialect among
-the callers dicast is normally run with (see `dicast.sh`) and needs no
-caller-specific handling in the parser.
+the callers dicast is normally run with and needs no caller-specific
+handling in the parser.
 
 Verified against the real parser (`caller_vcf_to_dataframe`): all 20 records
 round-trip to the expected `sv_type` / `start` / `end` / `sv_len` / `GT=(1,1)`

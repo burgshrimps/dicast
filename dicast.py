@@ -229,7 +229,7 @@ def score_variants(sv_types: list, arguments: argparse.Namespace, sample: str):
     dicast_df.to_csv(f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.dicast.tsv', sep='\t', index=False, na_rep='NA')
 
 
-if __name__ == '__main__':
+def main():
 
     # Parse command line arguments
     arguments = parse_arguments()
@@ -246,7 +246,7 @@ if __name__ == '__main__':
 
     print('')
     logging.info('############### Start DICAST ###############\n')
-    logging.info('CMD: python3 {0}'.format(' '.join(sys.argv)))
+    logging.info('CMD: {0}'.format(' '.join(sys.argv)))
     print('')
 
     if arguments.command == 'call':
@@ -477,3 +477,6 @@ if __name__ == '__main__':
             _write_benchmark()
 
         logging.info('############### End DICAST ###############\n')
+
+if __name__ == '__main__':
+    main()

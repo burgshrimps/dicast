@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dicast"
+version = "1.0.0"
+description = "Confidence scoring for structural-variant calls from short-read sequencing"
+license = {text = "GPL-3.0-only"}
+requires-python = ">=3.10"
+# Runtime dependencies are provided by the conda environment (environment.yml);
+# pysam/pyBigWig need compiled libraries pip cannot reliably build, so they are
+# deliberately not declared here.
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/burgshrimps/dicast"
+
+[project.scripts]
+dicast = "dicast:main"
+
+[tool.setuptools]
+py-modules = ["dicast"]
+packages = ["dicast_lib"]

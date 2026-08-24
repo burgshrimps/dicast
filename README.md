@@ -45,7 +45,7 @@ Individual annotation flags (`--repeats`, `--gc`, ...) override single files.*
 and calls runs the whole pipeline in seconds:
 
 ```bash
-python3 dicast.py call \
+dicast call \
     --sample demo --workdir demo_out \
     --fai test_data/hg38.fa.fai \
     --bam test_data/demo.bam \
@@ -60,7 +60,7 @@ coverage is artificially downsampled at the variant loci.
 **Single sample:**
 
 ```bash
-python3 dicast.py call \
+dicast call \
     --sample SAMPLE_NAME \
     --workdir WORKDIR \
     --fai /path/to/reference.fa.fai \
@@ -71,14 +71,14 @@ python3 dicast.py call \
 
 `--vcfs` takes one or more `caller=path` entries; the label you pick is what
 shows up in the output `caller` column and decides which re-emitted VCF gets
-which scores. See `dicast.sh` for a fuller worked example (five callers).
+which scores.
 
 **Multiple samples (e.g. a trio) with cross-sample rescue** — every sample is
 additionally scored on calls that only the *other* samples' callers found
 (see [Rescued calls](#rescued-calls)); at least two samples are required:
 
 ```bash
-python3 dicast.py multi \
+dicast multi \
     --bams MOTHER=/path/mother.bam FATHER=/path/father.bam CHILD=/path/child.bam \
     --vcfs MOTHER:delly=/path/mother_delly.vcf.gz MOTHER:manta=/path/mother_manta.vcf.gz \
            FATHER:delly=/path/father_delly.vcf.gz FATHER:manta=/path/father_manta.vcf.gz \
@@ -87,8 +87,7 @@ python3 dicast.py multi \
 ```
 
 `--bams` takes `sample=bam_file` entries and `--vcfs` takes
-`sample:caller=vcf_file` entries. See `dicast_multi.sh` for a full worked
-example.
+`sample:caller=vcf_file` entries.
 
 **Population mode** (`call` and `multi`): `--pop` adds the PAV
 structural-variant population catalog as an extra "caller" (labeled `pav`)
@@ -97,7 +96,7 @@ recall on common variants. DUP and INV always fall back to the normal
 model / rule:
 
 ```bash
-python3 dicast.py call ... --pop
+dicast call ... --pop
 ```
 
 `--pop-catalog` overrides the catalog VCF path (default:
@@ -109,8 +108,8 @@ Other useful flags: `--chrom` restricts work to specific chromosomes
 (default: all standard chromosomes through chrX), `--sv_types` to specific
 SV types (default: `DEL DUP INS INV`), and `--threads` parallelises the
 per-chromosome, per-SV-type feature collection. For detailed descriptions of
-all parameters and their defaults, run `python3 dicast.py call --help` and
-`python3 dicast.py multi --help`.
+all parameters and their defaults, run `dicast call --help` and
+`dicast multi --help`.
 
 ## Interpreting dicast output
 

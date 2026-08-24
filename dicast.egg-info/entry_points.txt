@@ -1,0 +1,2 @@
+[console_scripts]
+dicast = dicast:main
