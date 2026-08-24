@@ -87,7 +87,7 @@ dicast call ... --pop
 be published alongside the annotation release; until then, `--pop` requires
 you to supply your own via `--pop-catalog`.
 
-## Interpreting dicast output
+## Output
 
 A `call` run fills `--workdir` with a fixed tree of intermediate and final
 files, all named `SAMPLE_REF.SVs.*` (`REF` defaults to `hg38`):
