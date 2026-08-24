@@ -97,67 +97,10 @@ WORKDIR/
 
 `multi` builds the exact same tree per sample, under `WORKDIR/SAMPLE/...`.
 
-### The scores TSV
-
-**`output/SAMPLE_REF.SVs.dicast.tsv`** has one row per input call, for example:
-
-```
-id            cohort  sample  reference  technology  caller  sv_type  chrom  chrom_2  start     end       sv_len  filter  qual  dicast_qual  genotype
-DEL00000001   none    demo    hg38       ill         delly   DEL      chr21  NA       9101395   9101696   301     PASS    NA    0.102        (1, 1)
-DEL00000002   none    demo    hg38       ill         delly   DEL      chr21  NA       9616899   9618664   1765    PASS    NA    0.005        (1, 1)
-DEL00000003   none    demo    hg38       ill         delly   DEL      chr21  NA       13278442  13278523  81      PASS    NA    0.637        (1, 1)
-```
-
-| column | meaning |
-|---|---|
-| `id` | dicast-internal call id (e.g. `DEL00000001`) |
-| `cohort` | `--cohort` value (default `none`) |
-| `sample` | `--sample` value |
-| `reference` | `--ref` value |
-| `technology` | `--technology` value (default `ill`) |
-| `caller` | the `caller` label from `--vcfs`, or `rescue:<origin sample>:<origin caller>` for a rescued row |
-| `sv_type` | `DEL`, `DUP`, or `INS` |
-| `chrom`, `chrom_2`, `start`, `end` | breakpoint coordinates |
-| `sv_len` | SV length (bp) |
-| `filter` | the FILTER field from the source VCF record |
-| `qual` | the caller-reported QUAL, if present |
-| `dicast_qual` | dicast's confidence score, `[0, 1]` (`NA` if the model couldn't score the call) |
-| `genotype` | genotype tuple, e.g. `(1, 1)` |
-
-### The DQ-tagged VCFs
-
-Each caller's input VCF is re-emitted into `output/` as
-**`SAMPLE_CALLER.dicast.vcf`** (named after the sample and the `caller`
-label from `--vcfs`, not the input filename, so two callers whose input
-files happen to share a basename never collide), with a new INFO field:
-
-```
-##INFO=<ID=DQ,Number=1,Type=String,Description="Dicast Quality Score">
-```
-
-`DQ` carries the same `dicast_qual` value as the TSV; a record present in the
-VCF but missing from the scored TSV (filtered out upstream) gets `DQ=-1`.
-
-### Merged VCF
-
-**`output/SAMPLE_REF.SVs.dicast.merged.vcf`** collapses the scores TSV down
-to one call per real-world SV event: calls across all callers (and, in
-`multi` mode, rescued calls) are clustered per SV type (DEL/DUP by
->50% reciprocal breakpoint overlap, INS by <200bp breakpoint distance), and
-only the highest-`dicast_qual` call in each cluster survives, genotype
-included. Selection is population-aware: a `pav` population-catalog call
-only wins its cluster if no non-population caller call in that cluster
-reaches `dicast_qual >= 0.4`. It's a fresh, minimal VCF (not a merge of the
-input VCFs' headers) with a `CALLER` INFO tag naming which caller produced
-the winning call and a `DQ` INFO tag carrying its `dicast_qual`.
-
-### Rescued calls
-
-In `multi` mode, calls found in one sample but missing from another sample's
-own callers are transplanted into that sample's candidate set and scored
-against its own BAM, recovering calls the sample's callers missed but that
-show up as real signal once you actually look at that sample's reads.
-Rescued rows are distinguishable by their `caller` value:
-`rescue:<origin sample>:<origin caller>` (e.g. a deletion found only by the
-mother's delly call, rescued into the child, shows up as
-`rescue:MOTHER:delly` in the child's output).
+The scores TSV lists all input variants, each assigned an individual dicast
+quality score. The per-caller VCF files are the input VCFs re-emitted with an
+additional INFO tag `DQ` carrying the dicast quality score. The merged VCF
+first builds an overlap graph of SV calls likely representing the same
+variant, then uses the dicast score to pick one representative variant per
+cluster: essentially a deduplicated set of scored calls based on the input
+VCFs.
