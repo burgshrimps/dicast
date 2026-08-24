@@ -155,8 +155,8 @@ def test_call_subcommand_defaults(call_required_args):
     assert args.pop_catalog == os.path.join(args.annot_dir, parsing.POP_CATALOG_NAME)
     assert args.benchmark is None
     assert args.sv_types is None
-    # --models defaults to a package-relative path, not None/required.
-    assert args.models == os.path.join(parsing.REPO_ROOT, 'models')
+    # --models defaults to the package's own models directory.
+    assert args.models == parsing.DEFAULT_MODELS_DIR
     # This CLI has no exome support at all.
     assert not hasattr(args, 'exome')
     assert not hasattr(args, 'exome_regions')
@@ -329,7 +329,7 @@ def test_models_default_is_repo_relative(call_required_args):
             "--vcfs", f"manta={call_required_args['vcf']}",
         ]
     )
-    assert args.models == os.path.join(parsing.REPO_ROOT, 'models')
+    assert args.models == parsing.DEFAULT_MODELS_DIR
 
 
 @pytest.mark.unit

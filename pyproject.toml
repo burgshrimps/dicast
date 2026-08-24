@@ -8,10 +8,24 @@ version = "1.0.0"
 description = "Confidence scoring for structural-variant calls from short-read sequencing"
 license = {text = "GPL-3.0-only"}
 requires-python = ">=3.10"
-# Runtime dependencies are provided by the conda environment (environment.yml);
-# pysam/pyBigWig need compiled libraries pip cannot reliably build, so they are
-# deliberately not declared here.
-dependencies = []
+# Kept in sync with environment.yml; all of these ship prebuilt wheels on
+# PyPI for Linux/macOS, so `pip install git+...` works without conda.
+dependencies = [
+    "numpy",
+    "pandas",
+    "xgboost>=1.7,<3",
+    "scikit-learn",  # xgboost's XGBClassifier wrapper requires it
+    "pysam",
+    "pyBigWig",
+    "bioframe",
+    "vcfpy",
+    "matplotlib",
+    "pyyaml",
+    "tqdm",
+    "joblib",
+    "packaging",
+    "networkx",
+]
 
 [project.urls]
 Repository = "https://github.com/burgshrimps/dicast"
@@ -22,3 +36,6 @@ dicast-fetch-annotations = "dicast.annotations:fetch_main"
 
 [tool.setuptools]
 packages = ["dicast"]
+
+[tool.setuptools.package-data]
+dicast = ["models/*.json"]

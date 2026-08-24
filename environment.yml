@@ -7,6 +7,7 @@ dependencies:
   - numpy
   - pandas
   - xgboost>=1.7,<3
+  - scikit-learn  # xgboost's XGBClassifier wrapper requires it
   - pysam
   - pyBigWig
   - bioframe

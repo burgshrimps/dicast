@@ -30,6 +30,12 @@ conda env create -f environment.yml
 conda activate dicast
 ```
 
+Or with pip (Python 3.10+):
+
+```bash
+pip install git+https://github.com/burgshrimps/dicast.git
+```
+
 ## Usage
 
 *On first use dicast asks where to store the hg38 annotation files it
@@ -179,8 +185,8 @@ mother's delly call, rescued into the child, shows up as
 
 ## Models
 
-Shipped in `models/`, one XGBoost JSON per SV type (plus population-aware
-variants for DEL/INS):
+Shipped with the package (`dicast/models/`), one XGBoost JSON per SV type
+(plus population-aware variants for DEL/INS):
 
 | model | SV type | trained on |
 |---|---|---|

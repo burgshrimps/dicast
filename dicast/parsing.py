@@ -6,6 +6,9 @@ from dicast import annotations
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Trained models ship inside the package so pip installs find them too.
+DEFAULT_MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
+
 # Canonical filenames of the hg38 annotation files shipped under --annot-dir.
 ANNOT_CANONICAL_NAMES = {
     'repeats': 'hg38_repeatmasker.tsv',
@@ -272,7 +275,7 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_call.add_argument('--gc', help='BIGWIG file with GC content', default=None)
     parser_call.add_argument('--bam', help='BAM file', required=True)
     parser_call.add_argument('--vcfs', nargs='*', type=lambda kv: kv.split('='), help='List of VCF files. Needs to be in the format method=vcf_file', required=True)
-    parser_call.add_argument('--models', help='Directory with trained models', default=os.path.join(REPO_ROOT, 'models'))
+    parser_call.add_argument('--models', help='Directory with trained models', default=DEFAULT_MODELS_DIR)
     parser_call.add_argument('--threads', help='Number of threads to use', default=1, type=int)
     parser_call.add_argument('--pop', help='Add the PAV population catalog as an additional caller and prefer population-aware models', action='store_true')
     parser_call.add_argument('--pop-catalog', help='VCF file with the PAV population catalog', default=None)
@@ -297,7 +300,7 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_multi.add_argument('--vntrs', help='BED file with VNTR regions from Chaisson', default=None)
     parser_multi.add_argument('--strs', help='BED file with STR regions from Chaisson', default=None)
     parser_multi.add_argument('--gc', help='BIGWIG file with GC content', default=None)
-    parser_multi.add_argument('--models', help='Directory with trained models', default=os.path.join(REPO_ROOT, 'models'))
+    parser_multi.add_argument('--models', help='Directory with trained models', default=DEFAULT_MODELS_DIR)
     parser_multi.add_argument('--threads', help='Number of threads to use', default=1, type=int)
     parser_multi.add_argument('--pop', help='Add the PAV population catalog as an additional caller (for every sample) and prefer population-aware models', action='store_true')
     parser_multi.add_argument('--pop-catalog', help='VCF file with the PAV population catalog', default=None)
