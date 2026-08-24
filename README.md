@@ -72,6 +72,12 @@ dicast multi \
 `--bams` takes `sample=bam_file` entries and `--vcfs` takes
 `sample:caller=vcf_file` entries.
 
+In multi-sample mode dicast not only scores the variants present in each
+sample's input VCFs but also variants that occur in the other samples of the
+run. For example, if based on the input VCFs a variant supposedly occurs only
+in the child and not the parents, dicast checks the same region in the
+parents' sequencing data for signal supporting an SV call.
+
 **Population mode** (`call` and `multi`): `--pop` adds the PAV
 structural-variant population catalog as an extra "caller" (labeled `pav`)
 and switches DEL/INS scoring to the population-aware models, which favour
