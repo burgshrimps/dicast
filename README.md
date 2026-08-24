@@ -15,8 +15,7 @@ breakpoints, and scores it with a pretrained XGBoost model, one per SV type
 (DEL, DUP, INS). Every variant receives an easily interpretable confidence score between 0
 and 1. We show
 that this approach outperforms individual SV callers as well as commonly
-used consensus approaches. The shipped annotations and models are
-hg38-specific.
+used consensus approaches.
 
 ## Installation
 
