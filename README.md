@@ -97,8 +97,6 @@ WORKDIR/
 ```
 
 `multi` builds the exact same tree per sample, under `WORKDIR/SAMPLE/...`.
-The three files under `output/` are the ones you care about: the scores TSV,
-the DQ-tagged per-caller VCFs, and the merged VCF.
 
 ### The scores TSV
 
