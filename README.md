@@ -12,8 +12,8 @@ every input variant (we recommend combining several SV callers, see below),
 dicast builds an internal representation from over 100 features describing
 the genomic context and the alignment signal around the variant's
 breakpoints, and scores it with a pretrained XGBoost model, one per SV type
-(DEL, DUP, INS). Every variant receives a confidence score in `[0, 1]`,
-written to a combined TSV and as a `DQ` INFO tag in re-emitted VCFs. We show
+(DEL, DUP, INS). Every variant receives an easily interpretable confidence score between 0
+and 1. We show
 that this approach outperforms individual SV callers as well as commonly
 used consensus approaches. The shipped annotations and models are
 hg38-specific.
