@@ -91,7 +91,7 @@ WORKDIR/
 │   ├── aln/SAMPLE_REF.SVs.aln.ill.CHROM.SVTYPE.tsv   alignment feature shards
 │   └── SAMPLE_REF.SVs.annot.tsv                      combined feature matrix
 └── output/
-    ├── SAMPLE_REF.SVs.dicast.tsv                     scores (the deliverable)
+    ├── SAMPLE_REF.SVs.dicast.tsv                     TSV with all variant scores
     ├── SAMPLE_CALLER.dicast.vcf                      per input caller, DQ-tagged
     └── SAMPLE_REF.SVs.dicast.merged.vcf              merged best-per-cluster VCF
 ```
