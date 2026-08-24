@@ -65,7 +65,8 @@ dicast multi \
     --vcfs MOTHER:delly=/path/mother_delly.vcf.gz MOTHER:manta=/path/mother_manta.vcf.gz \
            FATHER:delly=/path/father_delly.vcf.gz FATHER:manta=/path/father_manta.vcf.gz \
            CHILD:delly=/path/child_delly.vcf.gz  CHILD:manta=/path/child_manta.vcf.gz \
-    --workdir WORKDIR --fai /path/to/reference.fa.fai
+    --workdir WORKDIR --fai /path/to/reference.fa.fai \
+    --threads 24
 ```
 
 `--bams` takes `sample=bam_file` entries and `--vcfs` takes
