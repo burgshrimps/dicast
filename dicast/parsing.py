@@ -89,10 +89,8 @@ def _check_annotation_files(arguments: argparse.Namespace, problems: list):
 def _check_model_files(arguments: argparse.Namespace, problems: list):
     """ Appends a problem for every SV type whose model file is missing. """
 
-    sv_types_to_check = arguments.sv_types if arguments.sv_types else ['DEL', 'DUP', 'INS', 'INV']
+    sv_types_to_check = arguments.sv_types if arguments.sv_types else ['DEL', 'DUP', 'INS']
     for sv_type in sv_types_to_check:
-        if sv_type == 'INV':
-            continue
         if arguments.pop and sv_type in ('DEL', 'INS') and os.path.isfile(os.path.join(arguments.models, f'dicast_{sv_type}_pop.json')):
             continue
         model_filename = os.path.join(arguments.models, f'dicast_{sv_type}.json')
@@ -280,7 +278,7 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_call.add_argument('--pop', help='Add the PAV population catalog as an additional caller and prefer population-aware models', action='store_true')
     parser_call.add_argument('--pop-catalog', help='VCF file with the PAV population catalog', default=None)
     parser_call.add_argument('--benchmark', help='Path to write a per-stage TSV with wall-time, CPU-time and peak RSS (feature_collection, prediction, total). If unset, no benchmark is written.', default=None)
-    parser_call.add_argument('--sv_types', help='Restrict feature extraction and prediction to these SV types. Default: DEL DUP INS INV.', nargs='+', default=None)
+    parser_call.add_argument('--sv_types', help='Restrict feature extraction and prediction to these SV types. Default: DEL DUP INS.', nargs='+', choices=['DEL', 'DUP', 'INS'], default=None)
 
     parser_multi = subparsers.add_parser('multi', help='Multi-sample scoring with cross-sample rescue (e.g. a trio)')
     parser_multi.add_argument('--cohort', help='Cohort name', default='none')
@@ -305,7 +303,7 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_multi.add_argument('--pop', help='Add the PAV population catalog as an additional caller (for every sample) and prefer population-aware models', action='store_true')
     parser_multi.add_argument('--pop-catalog', help='VCF file with the PAV population catalog', default=None)
     parser_multi.add_argument('--benchmark', help='Path to write a per-stage TSV with wall-time, CPU-time and peak RSS (feature_collection, prediction, total). If unset, no benchmark is written.', default=None)
-    parser_multi.add_argument('--sv_types', help='Restrict feature extraction and prediction to these SV types. Default: DEL DUP INS INV.', nargs='+', default=None)
+    parser_multi.add_argument('--sv_types', help='Restrict feature extraction and prediction to these SV types. Default: DEL DUP INS.', nargs='+', choices=['DEL', 'DUP', 'INS'], default=None)
 
     args = parser.parse_args(arguments)
     args = resolve_annotation_paths(args)

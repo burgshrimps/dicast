@@ -25,7 +25,7 @@ def _reciprocal_overlap(row: pd.Series) -> float:
 def _matching_pairs(df: pd.DataFrame, sv_type: str) -> pd.DataFrame:
     """ Finds pairs of variants of one SV type that describe the same event.
 
-    DEL/DUP/INV are matched by reciprocal overlap, INS by breakpoint distance
+    DEL/DUP are matched by reciprocal overlap, INS by breakpoint distance
     (mirrors the matching logic the old cohort mode used).
     """
 

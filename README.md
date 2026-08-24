@@ -11,8 +11,7 @@ calls made by other SV callers (delly, manta, lumpy, cnvnator, gridss, or any
 caller that emits a standard SV VCF). Given a coordinate-sorted, indexed
 Illumina BAM plus one or more per-caller VCFs, it extracts alignment and
 reference-context features around each call's breakpoints and scores it with
-a pretrained XGBoost model, one model per SV type (DEL, DUP, INS; INV is
-scored with a fixed rule). Every call gets a `dicast_qual` score in `[0, 1]`,
+a pretrained XGBoost model, one model per SV type (DEL, DUP, INS). Every call gets a `dicast_qual` score in `[0, 1]`,
 written as a column in a combined TSV and as a `DQ` INFO tag in re-emitted
 VCFs. dicast is caller-agnostic (caller names are free-text labels), can
 score several samples together with cross-sample rescue (e.g. trios), and
@@ -77,8 +76,7 @@ dicast multi \
 **Population mode** (`call` and `multi`): `--pop` adds the PAV
 structural-variant population catalog as an extra "caller" (labeled `pav`)
 and switches DEL/INS scoring to the population-aware models, which favour
-recall on common variants. DUP and INV always fall back to the normal
-model / rule:
+recall on common variants. DUP always falls back to the normal model:
 
 ```bash
 dicast call ... --pop
@@ -91,7 +89,7 @@ you to supply your own via `--pop-catalog`.
 
 Other useful flags: `--chrom` restricts work to specific chromosomes
 (default: all standard chromosomes through chrX), `--sv_types` to specific
-SV types (default: `DEL DUP INS INV`), and `--threads` parallelises the
+SV types (default: `DEL DUP INS`), and `--threads` parallelises the
 per-chromosome, per-SV-type feature collection. For detailed descriptions of
 all parameters and their defaults, run `dicast call --help` and
 `dicast multi --help`.
@@ -137,7 +135,7 @@ DEL00000003   none    demo    hg38       ill         delly   DEL      chr21  NA 
 | `reference` | `--ref` value |
 | `technology` | `--technology` value (default `ill`) |
 | `caller` | the `caller` label from `--vcfs`, or `rescue:<origin sample>:<origin caller>` for a rescued row |
-| `sv_type` | `DEL`, `DUP`, `INS`, or `INV` |
+| `sv_type` | `DEL`, `DUP`, or `INS` |
 | `chrom`, `chrom_2`, `start`, `end` | breakpoint coordinates |
 | `sv_len` | SV length (bp) |
 | `filter` | the FILTER field from the source VCF record |
@@ -163,7 +161,7 @@ VCF but missing from the scored TSV (filtered out upstream) gets `DQ=-1`.
 
 **`output/SAMPLE_REF.SVs.dicast.merged.vcf`** collapses the scores TSV down
 to one call per real-world SV event: calls across all callers (and, in
-`multi` mode, rescued calls) are clustered per SV type — DEL/DUP/INV by
+`multi` mode, rescued calls) are clustered per SV type — DEL/DUP by
 >50% reciprocal breakpoint overlap, INS by <200bp breakpoint distance — and
 only the highest-`dicast_qual` call in each cluster survives, genotype
 included. Selection is population-aware: a `pav` population-catalog call
@@ -195,10 +193,6 @@ Shipped with the package (`dicast/models/`), one XGBoost JSON per SV type
 | `dicast_INS.json` | INS | tGenVar cohort (8 samples), delly/manta/gridss calls |
 | `dicast_DEL_pop.json` | DEL (population-aware) | tGenVar cohort + PAV population calls as additional positives |
 | `dicast_INS_pop.json` | INS (population-aware) | tGenVar cohort + PAV population calls as additional positives |
-
-INV has no trained model — it's scored with a fixed rule based on clipped
-reads, discordant-pair signal, coverage, mapping quality, and split reads
-(see `Dicast.score_inversions` in `dicast/model.py`).
 
 Swap in your own models by pointing `--models` at a directory with the same
 `dicast_<SV_TYPE>[_pop].json` naming convention; `dicast/model.py` is

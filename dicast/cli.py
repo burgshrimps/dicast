@@ -62,7 +62,7 @@ chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8',
           'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
 
 # List of SV types currently supported by dicast
-sv_types = ['DEL', 'DUP', 'INS', 'INV']
+sv_types = ['DEL', 'DUP', 'INS']
 
 
 def sample_root(command: str, workdir: str, sample: str) -> str:
@@ -278,26 +278,19 @@ def score_variants(sv_types: list, arguments: argparse.Namespace, sample: str):
     use_pop_models = getattr(arguments, 'pop', False)
     dicast_dfs = []
     for sv_type in sv_types:
-        if sv_type != 'INV':
-            model_filename = f'{arguments.models}/dicast_{sv_type}.json'
-            if use_pop_models and sv_type in ('DEL', 'INS'):
-                pop_model_filename = f'{arguments.models}/dicast_{sv_type}_pop.json'
-                if os.path.isfile(pop_model_filename):
-                    model_filename = pop_model_filename
-                else:
-                    logging.info(f'--pop set but no population model for {sv_type} (pop models ship for DEL and INS only); falling back to {model_filename}')
-            dicast = Dicast(sv_type)
-            dicast.load_from_csv(variant_features_filename)
-            dicast.impute_missing_values()
-            dicast.load(model_filename)
-            dicast.predict()
-            dicast_dfs.append(dicast.to_df())   
-        else:
-            dicast = Dicast(sv_type)
-            dicast.load_from_csv(variant_features_filename)
-            dicast.impute_missing_values()
-            dicast.score_inversions()
-            dicast_dfs.append(dicast.to_df())
+        model_filename = f'{arguments.models}/dicast_{sv_type}.json'
+        if use_pop_models and sv_type in ('DEL', 'INS'):
+            pop_model_filename = f'{arguments.models}/dicast_{sv_type}_pop.json'
+            if os.path.isfile(pop_model_filename):
+                model_filename = pop_model_filename
+            else:
+                logging.info(f'--pop set but no population model for {sv_type} (pop models ship for DEL and INS only); falling back to {model_filename}')
+        dicast = Dicast(sv_type)
+        dicast.load_from_csv(variant_features_filename)
+        dicast.impute_missing_values()
+        dicast.load(model_filename)
+        dicast.predict()
+        dicast_dfs.append(dicast.to_df())
     dicast_df = pd.concat([df for df in dicast_dfs if not df.empty], ignore_index=True)
     dicast_df.to_csv(paths['dicast'], sep='\t', index=False, na_rep='NA')
 

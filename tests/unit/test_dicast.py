@@ -22,9 +22,9 @@ Dropped vs. the older lucid/dicast dev line's test_dicast.py
 --------------------------------------------------------------
 * ``score_variants``'s old BND dispatch case (asserting a
   ``score_translocations`` heuristic call for ``sv_type == 'BND'``) was
-  dropped. In this repo, ``score_variants`` only special-cases ``'INV'``;
-  every other sv_type -- including 'BND', if ever passed -- goes through the
-  XGBoost model-loading branch (``dicast_BND.json``). ``Dicast.score_
+  dropped. In this repo, ``score_variants`` has no special cases left (INV
+  rule-based scoring was removed too): every sv_type goes through the
+  XGBoost model-loading branch. ``Dicast.score_
   translocations`` still exists on the model class (see
   tests/unit/test_model.py) but ``dicast.py`` no longer calls it from
   anywhere, and no ``BND`` model ships in ``models/`` nor is BND in the
@@ -457,10 +457,9 @@ def _make_fake_dicast(per_type_orders, loaded_models):
     calls (into ``per_type_orders``) and every model filename passed to
     ``load()`` (into ``loaded_models``).
 
-    Note: no ``score_translocations`` method is defined here. In this repo
-    ``score_variants`` only special-cases 'INV' -- every other sv_type,
-    'BND' included, goes through the model-loading branch below (see module
-    docstring's "Dropped" section).
+    Note: no rule-based scorer methods are defined here. In this repo every
+    sv_type goes through the model-loading branch (see module docstring's
+    "Dropped" section).
     """
     class _FakeDicast:
         def __init__(self, sv_type):
@@ -479,9 +478,6 @@ def _make_fake_dicast(per_type_orders, loaded_models):
 
         def predict(self):
             self._order.append("predict")
-
-        def score_inversions(self):
-            self._order.append("score_inversions")
 
         def to_df(self):
             self._order.append("to_df")
@@ -507,7 +503,7 @@ def test_score_variants_dispatches_per_sv_type(tmp_path, monkeypatch):
     args = SimpleNamespace(
         command="call", workdir=str(tmp_path), ref="hg38", models="/models",
     )
-    sv_types = ["DEL", "DUP", "INV"]
+    sv_types = ["DEL", "DUP"]
 
     dicast.score_variants(sv_types, args, "S1")
 
@@ -519,14 +515,10 @@ def test_score_variants_dispatches_per_sv_type(tmp_path, monkeypatch):
         "load_from_csv", "impute_missing_values", "load", "predict", "to_df"]
     assert loaded_models == ["/models/dicast_DEL.json", "/models/dicast_DUP.json"]
 
-    # INV is scored heuristically (no model load).
-    assert per_type_orders["INV"] == [
-        "load_from_csv", "impute_missing_values", "score_inversions", "to_df"]
-
     # The concatenated predictions are written to the dicast TSV, under output/.
     out = pd.read_csv(tmp_path / "output" / "S1_hg38.SVs.dicast.tsv", sep="\t")
-    assert sorted(out["sv_type"]) == ["DEL", "DUP", "INV"]
-    assert len(out) == 3
+    assert sorted(out["sv_type"]) == ["DEL", "DUP"]
+    assert len(out) == 2
 
 
 @pytest.mark.unit

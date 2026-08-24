@@ -27,7 +27,7 @@ import bioframe as bf
 import networkx as nx
 
 
-# Thresholds specified by the merge feature: DEL/DUP/INV cluster by
+# Thresholds specified by the merge feature: DEL/DUP cluster by
 # reciprocal overlap, INS by breakpoint distance.
 RECIPROCAL_OVERLAP_THR = 0.5
 INS_BREAKPOINT_DISTANCE_THR = 200
@@ -39,7 +39,7 @@ POPULATION_CALLERS = ['pav', 'gnomad']
 
 DICAST_THRESHOLD_DEFAULT = 0.4
 
-SYMBOLIC_ALT = {'DEL': '<DEL>', 'DUP': '<DUP>', 'INS': '<INS>', 'INV': '<INV>'}
+SYMBOLIC_ALT = {'DEL': '<DEL>', 'DUP': '<DUP>', 'INS': '<INS>'}
 
 
 def extract_overlap_ids(df1: pd.DataFrame, df2: pd.DataFrame, sv_type: str, max_dist_overlap: int = 500,
@@ -48,7 +48,7 @@ def extract_overlap_ids(df1: pd.DataFrame, df2: pd.DataFrame, sv_type: str, max_
     """ Extract IDs of overlapping SVs from two dataframes (breakpoint-distance matcher).
 
     Ported verbatim from the paper's evaluation code. Used here for INS
-    (breakpoint distance, `ignore_len=True`); DEL/DUP/INV use
+    (breakpoint distance, `ignore_len=True`); DEL/DUP use
     `compute_reciprocal_overlap` instead.
 
     Args:
@@ -181,7 +181,7 @@ def reciprocal_overlap(row: pd.Series) -> float:
 
 
 def compute_reciprocal_overlap(df1: pd.DataFrame, df2: pd.DataFrame, sv_type: str, overlap_threshold: float) -> pd.DataFrame:
-    """ Computes reciprocal overlap between two dataframes (DEL/DUP/INV matcher).
+    """ Computes reciprocal overlap between two dataframes (DEL/DUP matcher).
 
     Ported verbatim from the paper's evaluation code. `df2` must not be the
     same object as `df1` -- pass a `.copy()` (see module docstring).
@@ -291,7 +291,7 @@ def _cluster_winner_index(group: pd.DataFrame, dicast_threshold: float = DICAST_
 def _clusters_for_sv_type(df: pd.DataFrame, sv_type: str) -> pd.DataFrame:
     """ Clusters one SV type's rows of `df` using the matcher appropriate for it.
 
-    DEL/DUP/INV: reciprocal overlap > 0.5 (compute_reciprocal_overlap).
+    DEL/DUP: reciprocal overlap > 0.5 (compute_reciprocal_overlap).
     INS: breakpoint distance < 200bp, SV length ignored (extract_overlap_ids).
 
     Args:
@@ -325,7 +325,7 @@ def cluster_calls(df: pd.DataFrame) -> pd.DataFrame:
             sv_len, caller, dicast_qual, ... columns).
 
     Returns:
-        pd.DataFrame: `df`'s rows (any sv_type not DEL/DUP/INS/INV is
+        pd.DataFrame: `df`'s rows (any sv_type not DEL/DUP/INS is
             dropped -- dicast doesn't score anything else) with a 'cluster'
             column, globally unique across sv_types.
     """

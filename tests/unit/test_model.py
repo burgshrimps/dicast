@@ -6,7 +6,7 @@ These cover the deterministic, non-xgboost surface of ``Dicast``:
   lever). With ``feature_config_file=None`` (the default) no file is read --
   the constructor just builds the hardcoded per-SV-type feature dicts and
   expands bin suffixes into ``self.features``.
-* The rule-based scorers ``score_inversions`` / ``score_translocations``
+* The rule-based scorer ``score_translocations``
   (no fitted model needed). Note: this repo's CLI never invokes BND scoring
   end-to-end (no BND model ships in models/, and the default --sv-types list
   excludes BND), but the ``Dicast`` class itself is unchanged and still
@@ -226,84 +226,6 @@ def test_impute_missing_values_ins_branch_skips_iii_iv():
     # Bins III/IV columns were never added for INS.
     assert "ill_cov_mean_III" not in v.columns
     assert "ill_cov_mean_IV" not in v.columns
-
-
-# ---------------------------------------------------------------------------
-# score_inversions  (rule-based, no model)
-# ---------------------------------------------------------------------------
-
-def _inversion_df():
-    """Two rows: row 0 satisfies every inversion mask, row 1 fails them.
-
-    Inversion is scored 1 when ALL of:
-      * >=3 of the four clipreads bins  > 0.2
-      * >=3 of the eight disco ff/rr cols > 0.1  (relaxed)
-      * >=2 of the eight disco ff/rr cols > 0.2  (strict)
-      * all four cov_mean bins <= 3.5
-      * sv_len < 3_000_000
-    """
-    bp = ["I", "II", "III", "IV"]
-    row_hit = {}
-    row_miss = {}
-    for b in bp:
-        # clipreads: hit has all 4 > 0.2; miss has all 0.
-        row_hit[f"ill_clipreads_{b}"] = 0.9
-        row_miss[f"ill_clipreads_{b}"] = 0.0
-        # disco ff/rr: hit has all > 0.2; miss has all 0.
-        row_hit[f"ill_disco_ff_{b}"] = 0.5
-        row_miss[f"ill_disco_ff_{b}"] = 0.0
-        row_hit[f"ill_disco_rr_{b}"] = 0.5
-        row_miss[f"ill_disco_rr_{b}"] = 0.0
-        # cov_mean: hit <= 3.5; miss high.
-        row_hit[f"ill_cov_mean_{b}"] = 2.0
-        row_miss[f"ill_cov_mean_{b}"] = 10.0
-    row_hit["sv_len"] = 1000
-    row_miss["sv_len"] = 1000
-    row_hit["sv_type"] = "INV"
-    row_miss["sv_type"] = "INV"
-    row_hit["chrom"] = "chr1"
-    row_miss["chrom"] = "chr2"
-    return pd.DataFrame([row_hit, row_miss])
-
-
-@pytest.mark.unit
-def test_score_inversions_assigns_quality():
-    d = Dicast("INV")
-    d.load_from_df(_inversion_df())
-    d.score_inversions()
-    quals = list(d.variants_predict["dicast_qual"])
-    assert quals[0] == 1  # all masks satisfied
-    assert quals[1] == 0  # fails clip/disco/cov masks
-
-
-@pytest.mark.unit
-def test_score_inversions_long_sv_not_scored():
-    df = _inversion_df()
-    # Make the otherwise-passing row exceed the length cap.
-    df.loc[0, "sv_len"] = 5_000_000
-    d = Dicast("INV")
-    d.load_from_df(df)
-    d.score_inversions()
-    assert d.variants_predict.loc[0, "dicast_qual"] == 0
-
-
-@pytest.mark.unit
-def test_score_inversions_chrom_subset():
-    d = Dicast("INV")
-    d.load_from_df(_inversion_df())
-    d.score_inversions(chroms=["chr1"])
-    # Only the chr1 row (the hit) is kept.
-    assert d.variants_predict.shape[0] == 1
-    assert d.variants_predict.loc[0, "dicast_qual"] == 1
-
-
-@pytest.mark.unit
-def test_score_inversions_empty_subset_sets_nan():
-    d = Dicast("INV")
-    d.load_from_df(_inversion_df())
-    d.score_inversions(chroms=["chrZ"])  # matches nothing
-    assert d.variants_predict.shape[0] == 0
-    assert "dicast_qual" in d.variants_predict.columns
 
 
 # ---------------------------------------------------------------------------
