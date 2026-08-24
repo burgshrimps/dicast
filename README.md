@@ -50,12 +50,12 @@ dicast call \
     --fai /path/to/reference.fa.fai \
     --bam /path/to/sample.bam \
     --vcfs delly=/path/to/delly.vcf.gz manta=/path/to/manta.vcf.gz \
-    --threads 8
+    --threads 24
 ```
 
-`--vcfs` takes one or more `caller=path` entries; the label you pick is what
-shows up in the output `caller` column and decides which re-emitted VCF gets
-which scores.
+`--vcfs` takes one or more `caller=path` entries: the input SV calls that
+dicast scores. We recommend using the unfiltered calls of `manta`, `delly`,
+`lumpy`, `gridss`, and `cnvnator`.
 
 **Multiple samples (e.g. a trio) with cross-sample rescue:** every sample is
 additionally scored on calls that only the *other* samples' callers found
@@ -86,13 +86,6 @@ dicast call ... --pop
 `pav_catalog_hg38.vcf.gz` under `--annot-dir`). The catalog file itself will
 be published alongside the annotation release; until then, `--pop` requires
 you to supply your own via `--pop-catalog`.
-
-Other useful flags: `--chrom` restricts work to specific chromosomes
-(default: all standard chromosomes through chrX), `--sv_types` to specific
-SV types (default: `DEL DUP INS`), and `--threads` parallelises the
-per-chromosome, per-SV-type feature collection. For detailed descriptions of
-all parameters and their defaults, run `dicast call --help` and
-`dicast multi --help`.
 
 ## Interpreting dicast output
 
