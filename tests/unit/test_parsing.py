@@ -478,7 +478,7 @@ def test_validate_call_inputs_missing_annot_files_hint_fetch_command(call_requir
 
 
 @pytest.mark.unit
-def test_validate_call_inputs_pop_catalog_missing_mentions_release(call_required_args, tmp_path, capsys):
+def test_validate_call_inputs_pop_catalog_missing_hints_fetch(call_required_args, tmp_path, capsys):
     args = _build_valid_call_args(call_required_args, tmp_path)
     args.pop = True
     args.pop_catalog = str(tmp_path / "missing_pav_catalog.vcf.gz")
@@ -486,7 +486,7 @@ def test_validate_call_inputs_pop_catalog_missing_mentions_release(call_required
         parsing.validate_inputs(args)
     err = capsys.readouterr().err
     assert '--pop-catalog file not found' in err
-    assert 'release' in err
+    assert 'dicast-fetch-annotations' in err
 
 
 # ---------------------------------------------------------------------------

@@ -314,6 +314,25 @@ def test_caller_vcf_insertion_uses_svlen_and_start_plus_two(tmp_path):
 
 
 @pytest.mark.unit
+def test_caller_vcf_missing_sample_gets_missing_genotype(tmp_path):
+    # Catalog VCFs (e.g. the PAV population catalog used by --pop) carry no
+    # column for the analysis sample; records parse with a missing genotype
+    # instead of raising a pysam KeyError.
+    vcf = sv.make_caller_vcf(tmp_path)
+    df = utils.caller_vcf_to_dataframe(
+        vcf,
+        cohort="mycohort",
+        sample="not_in_this_vcf",
+        reference="hg38",
+        technology="illumina",
+        caller="pav",
+        canonical_chroms=["chr1", "chr2"],
+    ).set_index("id")
+    assert len(df) > 0
+    assert all(tuple(gt) == (None, None) for gt in df["genotype"])
+
+
+@pytest.mark.unit
 def test_caller_vcf_inversion_coordinates(tmp_path):
     df = _caller_df(tmp_path).set_index("id")
     src = sv.record_by_id("INV1")

@@ -170,6 +170,10 @@ def caller_vcf_to_dataframe(vcf: pysam.VariantFile, cohort: str, sample: str, re
     vcf_dict = {'id': [], 'sv_type': [], 'chrom': [], 'start' : [], 'chrom_2' : [], 'end': [], 
                 'sv_len' : [], 'filter': [], 'qual' : [], 'genotype': []}
     
+    # Catalog VCFs (e.g. the PAV population catalog used by --pop) carry no
+    # column for the analysis sample; their records get a missing genotype.
+    sample_in_vcf = sample in list(vcf.header.samples)
+
     for rec in vcf.fetch():
 
         # Check genotype of sample and only keep SVs that are present in sample
@@ -196,7 +200,10 @@ def caller_vcf_to_dataframe(vcf: pysam.VariantFile, cohort: str, sample: str, re
         vcf_dict['qual'].append(rec.qual)
         vcf_dict['sv_type'].append(sv_type)
         vcf_dict['start'].append(rec.start + 1)
-        vcf_dict['genotype'].append(rec.samples[sample]['GT'])
+        if sample_in_vcf:
+            vcf_dict['genotype'].append(rec.samples[sample]['GT'])
+        else:
+            vcf_dict['genotype'].append((None, None))
             
         # Deletions
         if sv_type == 'DEL':

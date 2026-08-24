@@ -47,8 +47,9 @@ def resolve_annotation_paths(args: argparse.Namespace) -> argparse.Namespace:
     if args.command not in ('call', 'multi'):
         return args
 
+    annot_dir_defaulted = args.annot_dir is None
     defaulted_flags = []
-    if args.annot_dir is None:
+    if annot_dir_defaulted:
         args.annot_dir = str(annotations.annot_dir(ask=True))
         defaulted_flags = [flag for flag in ANNOT_CANONICAL_NAMES if getattr(args, flag) is None]
 
@@ -56,14 +57,19 @@ def resolve_annotation_paths(args: argparse.Namespace) -> argparse.Namespace:
         if getattr(args, flag) is None:
             setattr(args, flag, os.path.join(args.annot_dir, filename))
 
+    pop_catalog_defaulted = args.pop_catalog is None
+    if pop_catalog_defaulted:
+        args.pop_catalog = os.path.join(args.annot_dir, POP_CATALOG_NAME)
+
     # Files the store manages are downloaded on first use (release assets, not
     # shipped in git); explicitly passed paths are the user's responsibility.
-    if defaulted_flags:
-        annotations.ensure_annotations(
-            [ANNOT_CANONICAL_NAMES[flag] for flag in defaulted_flags], args.annot_dir)
-
-    if args.pop_catalog is None:
-        args.pop_catalog = os.path.join(args.annot_dir, POP_CATALOG_NAME)
+    # The pop catalog (and its index) is only fetched when --pop is in play
+    # and both the store and the catalog path are defaults.
+    fetch_names = [ANNOT_CANONICAL_NAMES[flag] for flag in defaulted_flags]
+    if args.pop and annot_dir_defaulted and pop_catalog_defaulted:
+        fetch_names += [POP_CATALOG_NAME, POP_CATALOG_NAME + '.tbi']
+    if fetch_names:
+        annotations.ensure_annotations(fetch_names, args.annot_dir)
 
     if args.pop:
         if args.command == 'call':
@@ -164,8 +170,7 @@ def _validate_call_inputs(arguments: argparse.Namespace):
 
     if arguments.pop and not os.path.isfile(arguments.pop_catalog):
         problems.append(f'--pop-catalog file not found: {arguments.pop_catalog} '
-                        '(the PAV population catalog will be published with the release assets; '
-                        'until then point --pop-catalog at your copy)')
+                        '(run: dicast-fetch-annotations, or point --pop-catalog at your copy)')
 
     if arguments.bam and os.path.isfile(arguments.bam):
         _check_bam_index(arguments.bam, problems)
@@ -233,8 +238,7 @@ def _validate_multi_inputs(arguments: argparse.Namespace):
 
     if arguments.pop and not os.path.isfile(arguments.pop_catalog):
         problems.append(f'--pop-catalog file not found: {arguments.pop_catalog} '
-                        '(the PAV population catalog will be published with the release assets; '
-                        'until then point --pop-catalog at your copy)')
+                        '(run: dicast-fetch-annotations, or point --pop-catalog at your copy)')
 
     _check_annotation_files(arguments, problems)
     _check_model_files(arguments, problems)

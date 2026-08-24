@@ -20,6 +20,10 @@ ANNOT_FILES = {
     "hg38_vntrs_chaisson.bed": ("688d7c0400fcb3ff14a865ac24ef14d3", "830 KB"),
     "hg38_strs_chaisson.bed": ("a922016dde8a814e71482beb25afb97f", "27 MB"),
     "hg38_gc_content.bw": ("40fd8cc989e45eeab0d992aad255e3aa", "1.7 GB"),
+    # PAV population catalog for --pop: HGSVC freeze4 panel (HG002 excluded),
+    # DEL/INS >= 50bp, converted to dicast's symbolic-ALT SV dialect.
+    "pav_catalog_hg38.vcf.gz": ("fa0de6c134f385bc3ea618a263775547", "1 MB"),
+    "pav_catalog_hg38.vcf.gz.tbi": ("01fe872b373a5b08bdf8f999f788c6f3", "330 KB"),
 }
 
 TOTAL_SIZE = "~2.1 GB"
