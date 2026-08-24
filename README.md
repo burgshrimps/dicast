@@ -35,9 +35,6 @@ combined: GC content and RepeatMasker):
 bash download_annotations.sh
 ```
 
-**The demo below works without this step** — it uses a small, pre-sliced set
-of annotations under `test_data/annot/`.
-
 ## Usage
 
 *`--annot-dir` and `--models` default to the `annot/` and `models/`
