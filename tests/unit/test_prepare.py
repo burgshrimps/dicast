@@ -306,6 +306,7 @@ def test_get_variant_df_returns_assigned_frame(tmp_path):
 @pytest.mark.unit
 def test_save_variants_writes_tsv(tmp_path):
     prep = _make_prep(tmp_path, workdir=str(tmp_path))
+    (tmp_path / "input").mkdir()
     df = pd.DataFrame(
         {
             "sv_type": ["DEL", "DUP"],
@@ -317,7 +318,9 @@ def test_save_variants_writes_tsv(tmp_path):
     prep.df_variants = df
     prep.save_variants()
 
-    expected_path = tmp_path / "sampleA_hg38.SVs.raw.tsv"
+    # save_variants writes under workdir/input/ (see the new workdir tree
+    # layout built by dicast.parsing.make_workdir_tree).
+    expected_path = tmp_path / "input" / "sampleA_hg38.SVs.raw.tsv"
     assert expected_path.exists()
 
     # Reload and confirm it round-trips to the same frame (TSV, no index col).

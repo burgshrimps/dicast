@@ -39,6 +39,7 @@ jobs:
           import dicast.collect_reference
           import dicast.model
           import dicast.multi
+          import dicast.merge
           import dicast.utils
           print('dicast: all modules imported OK')
           "
@@ -71,10 +72,18 @@ jobs:
       - name: Check demo output
         shell: bash -el {0}
         run: |
-          test -f demo_out/demo_hg38.SVs.dicast.tsv
-          rows=$(($(wc -l < demo_out/demo_hg38.SVs.dicast.tsv) - 1))
+          test -f demo_out/output/demo_hg38.SVs.dicast.tsv
+          rows=$(($(wc -l < demo_out/output/demo_hg38.SVs.dicast.tsv) - 1))
           echo "Data rows: $rows"
           if [ "$rows" -ne 20 ]; then
             echo "Expected 20 data rows, got $rows"
+            exit 1
+          fi
+
+          test -f demo_out/output/demo_hg38.SVs.dicast.merged.vcf
+          merged_records=$(grep -vc '^#' demo_out/output/demo_hg38.SVs.dicast.merged.vcf)
+          echo "Merged VCF records: $merged_records"
+          if [ "$merged_records" -lt 1 ]; then
+            echo "Expected at least 1 merged VCF record, got $merged_records"
             exit 1
           fi

@@ -97,6 +97,20 @@ def _check_model_files(arguments: argparse.Namespace, problems: list):
             problems.append(f'Model file not found for SV type {sv_type}: {model_filename}')
 
 
+def make_workdir_tree(root: str):
+    """ Creates the fixed input/features/output subtree under one sample's
+    workdir root (== --workdir for `call`, == --workdir/<sample> for `multi`).
+
+    Args:
+        root (str): Root working directory for one sample.
+    """
+
+    os.makedirs(os.path.join(root, 'input'), exist_ok=True)
+    os.makedirs(os.path.join(root, 'features', 'ref'), exist_ok=True)
+    os.makedirs(os.path.join(root, 'features', 'aln'), exist_ok=True)
+    os.makedirs(os.path.join(root, 'output'), exist_ok=True)
+
+
 def _check_bam_index(bam_file: str, problems: list):
     """ Appends a problem if no index can be found next to a BAM file. """
 
@@ -162,7 +176,7 @@ def _validate_call_inputs(arguments: argparse.Namespace):
             print(f'ERROR: {problem}', file=sys.stderr)
         sys.exit(1)
 
-    os.makedirs(arguments.workdir, exist_ok=True)
+    make_workdir_tree(arguments.workdir)
 
 
 def _validate_multi_inputs(arguments: argparse.Namespace):
@@ -230,6 +244,8 @@ def _validate_multi_inputs(arguments: argparse.Namespace):
         sys.exit(1)
 
     os.makedirs(arguments.workdir, exist_ok=True)
+    for sample in bam_samples:
+        make_workdir_tree(os.path.join(arguments.workdir, sample))
 
 
 def parse_arguments(arguments = sys.argv[1:]):

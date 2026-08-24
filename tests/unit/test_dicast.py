@@ -113,13 +113,20 @@ _ALN_DROP = ['sample', 'sv_type', 'chrom', 'chrom_2', 'start', 'end', 'sv_len',
 
 
 def _write_combine_inputs(tmp_path, sample, ref, ids):
-    """Write the three feature TSVs combine_feature_files reads.
+    """Write the three feature TSVs combine_feature_files reads, under the
+    new workdir/input, workdir/features/ref, workdir/features/aln subtree.
 
     Each file gets the drop-columns + 'id' + one unique kept column so we can
     assert exactly which columns survive the merge.
     """
     n = len(ids)
-    workdir = tmp_path
+    root = tmp_path
+    input_dir = root / "input"
+    ref_dir = root / "features" / "ref"
+    aln_dir = root / "features" / "aln"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    ref_dir.mkdir(parents=True, exist_ok=True)
+    aln_dir.mkdir(parents=True, exist_ok=True)
 
     # raw TSV: 'id' + the kept-from-raw payload columns (nothing is dropped
     # from df_raw, so every column here survives).
@@ -128,14 +135,14 @@ def _write_combine_inputs(tmp_path, sample, ref, ids):
         "raw_feature": list(range(n)),
         "sample": [sample] * n,
     })
-    df_raw.to_csv(workdir / f"{sample}_{ref}.SVs.raw.tsv", sep="\t", index=False)
+    df_raw.to_csv(input_dir / f"{sample}_{ref}.SVs.raw.tsv", sep="\t", index=False)
 
     # ref TSV: 'id' + every drop column + one unique kept column 'ref_feature'.
     ref_cols = {"id": ids, "ref_feature": [x * 10 for x in range(n)]}
     for c in _REF_DROP:
         ref_cols[c] = [f"r_{c}"] * n
     pd.DataFrame(ref_cols).to_csv(
-        workdir / f"{sample}_{ref}.SVs.ref.tsv", sep="\t", index=False)
+        ref_dir / f"{sample}_{ref}.SVs.ref.tsv", sep="\t", index=False)
 
     # aln TSV (globbed): 'id' + every drop column + one unique kept column. Split
     # across two glob-matched files to exercise the pd.concat over the glob.
@@ -153,10 +160,10 @@ def _write_combine_inputs(tmp_path, sample, ref, ids):
         for c in _ALN_DROP:
             aln_cols[c] = [f"a_{c}"] * len(sub_ids)
         pd.DataFrame(aln_cols).to_csv(
-            workdir / f"{sample}_{ref}.SVs.aln.ill.{chrom}.DEL.tsv",
+            aln_dir / f"{sample}_{ref}.SVs.aln.ill.{chrom}.DEL.tsv",
             sep="\t", index=False)
 
-    return str(workdir)
+    return str(root)
 
 
 @pytest.mark.unit
@@ -202,7 +209,7 @@ def test_combine_feature_files_inner_join_drops_unmatched(tmp_path):
     _write_combine_inputs(tmp_path, sample, ref, ids)
 
     # Append an extra raw-only id after the helper wrote the files.
-    raw_path = tmp_path / f"{sample}_{ref}.SVs.raw.tsv"
+    raw_path = tmp_path / "input" / f"{sample}_{ref}.SVs.raw.tsv"
     df_raw = pd.read_csv(raw_path, sep="\t")
     df_raw = pd.concat(
         [df_raw, pd.DataFrame({"id": ["orphan"], "raw_feature": [99],
@@ -228,7 +235,7 @@ def test_combine_feature_files_preserves_string_sample_and_cohort_dtypes(tmp_pat
     ids = ["v1", "v2"]
     workdir = _write_combine_inputs(tmp_path, sample, ref, ids)
 
-    raw_path = tmp_path / f"{sample}_{ref}.SVs.raw.tsv"
+    raw_path = tmp_path / "input" / f"{sample}_{ref}.SVs.raw.tsv"
     # dtype=str here too: re-reading without it would itself re-typify '007'
     # as int64 before we even get to write the file combine_feature_files reads.
     df_raw = pd.read_csv(raw_path, sep="\t", dtype={"sample": str})
@@ -280,6 +287,7 @@ def test_add_info_tag_to_vcf_writes_dq(tmp_path):
         [("DEL1", 1000), ("DEL2", 2000), ("UNSCORED", 3000)],
     )
 
+    (tmp_path / "output").mkdir()
     scores = pd.DataFrame({
         "id": ["DEL1", "DEL2"],
         "caller": [caller, caller],
@@ -287,18 +295,19 @@ def test_add_info_tag_to_vcf_writes_dq(tmp_path):
         "sample": [sample, sample],
     })
     scores.to_csv(
-        tmp_path / f"{sample}_{ref}.SVs.dicast.tsv", sep="\t", index=False)
+        tmp_path / "output" / f"{sample}_{ref}.SVs.dicast.tsv", sep="\t", index=False)
 
     args = SimpleNamespace(
-        workdir=str(tmp_path), sample=sample, ref=ref,
+        command="call", workdir=str(tmp_path), sample=sample, ref=ref,
         vcfs=[(caller, vcf_in)],
     )
 
     dicast.add_info_tag_to_vcf(args)
 
-    # Output lands in workdir, named after the input with '.vcf' -> '.dicast.vcf'
-    # (workdir == tmp_path here, where the input also lives).
-    out_path = vcf_in.replace(".vcf", ".dicast.vcf")
+    # Output lands in workdir/output/, named after the sample + caller label
+    # (not the input filename -- two callers with same-named input files
+    # would otherwise silently overwrite each other's output).
+    out_path = str(tmp_path / "output" / f"{sample}_{caller}.dicast.vcf")
     reader = vcfpy.Reader.from_path(out_path)
 
     # The DQ INFO line must have been added to the header.
@@ -322,20 +331,22 @@ def test_add_info_tag_to_vcf_filters_by_caller(tmp_path):
     sample, ref = "S1", "hg38"
     vcf_in = _write_vcf(tmp_path, "delly.vcf", [("DEL1", 1000)])
 
+    (tmp_path / "output").mkdir()
     pd.DataFrame({
         "id": ["DEL1"],
         "caller": ["manta"],          # different caller than 'delly'
         "dicast_qual": [0.99],
         "sample": [sample],
-    }).to_csv(tmp_path / f"{sample}_{ref}.SVs.dicast.tsv", sep="\t", index=False)
+    }).to_csv(tmp_path / "output" / f"{sample}_{ref}.SVs.dicast.tsv", sep="\t", index=False)
 
     args = SimpleNamespace(
-        workdir=str(tmp_path), sample=sample, ref=ref,
+        command="call", workdir=str(tmp_path), sample=sample, ref=ref,
         vcfs=[("delly", vcf_in)],
     )
     dicast.add_info_tag_to_vcf(args)
 
-    reader = vcfpy.Reader.from_path(vcf_in.replace(".vcf", ".dicast.vcf"))
+    out_path = str(tmp_path / "output" / f"{sample}_delly.dicast.vcf")
+    reader = vcfpy.Reader.from_path(out_path)
     rec = next(iter(reader))
     assert rec.INFO["DQ"] == "-1"
 
@@ -361,7 +372,7 @@ def test_extract_reference_features_orchestration(tmp_path, monkeypatch):
     monkeypatch.setattr(dicast, "ReferenceAnnotator", _FakeRA)
 
     args = SimpleNamespace(
-        workdir=str(tmp_path), ref="hg38",
+        command="call", workdir=str(tmp_path), ref="hg38",
         repeats="/r/repeats", vntrs="/r/vntrs", strs="/r/strs",
         cgis="/r/cgis", centromeres="/r/centromeres", gaps="/r/gaps",
         althaps="/r/althaps", gc="/r/gc",
@@ -492,8 +503,9 @@ def test_score_variants_dispatches_per_sv_type(tmp_path, monkeypatch):
 
     # args has no 'pop' attribute at all -- getattr(arguments, 'pop', False)
     # must fall back to False (dicast.py:204) for backward compatibility.
+    (tmp_path / "output").mkdir()
     args = SimpleNamespace(
-        workdir=str(tmp_path), ref="hg38", models="/models",
+        command="call", workdir=str(tmp_path), ref="hg38", models="/models",
     )
     sv_types = ["DEL", "DUP", "INV"]
 
@@ -511,8 +523,8 @@ def test_score_variants_dispatches_per_sv_type(tmp_path, monkeypatch):
     assert per_type_orders["INV"] == [
         "load_from_csv", "impute_missing_values", "score_inversions", "to_df"]
 
-    # The concatenated predictions are written to the dicast TSV.
-    out = pd.read_csv(tmp_path / "S1_hg38.SVs.dicast.tsv", sep="\t")
+    # The concatenated predictions are written to the dicast TSV, under output/.
+    out = pd.read_csv(tmp_path / "output" / "S1_hg38.SVs.dicast.tsv", sep="\t")
     assert sorted(out["sv_type"]) == ["DEL", "DUP", "INV"]
     assert len(out) == 3
 
@@ -526,9 +538,10 @@ def test_score_variants_pop_flag_uses_pop_model_when_present(tmp_path, monkeypat
     models_dir = tmp_path / "models"
     models_dir.mkdir()
     (models_dir / "dicast_DEL_pop.json").write_text("{}")
+    (tmp_path / "output").mkdir()
 
     args = SimpleNamespace(
-        workdir=str(tmp_path), ref="hg38", models=str(models_dir), pop=True,
+        command="call", workdir=str(tmp_path), ref="hg38", models=str(models_dir), pop=True,
     )
     dicast.score_variants(["DEL"], args, "S1")
 
@@ -544,9 +557,10 @@ def test_score_variants_pop_flag_falls_back_when_pop_model_missing(tmp_path, mon
     models_dir = tmp_path / "models"
     models_dir.mkdir()
     # No dicast_INS_pop.json written -> must fall back to the standard model.
+    (tmp_path / "output").mkdir()
 
     args = SimpleNamespace(
-        workdir=str(tmp_path), ref="hg38", models=str(models_dir), pop=True,
+        command="call", workdir=str(tmp_path), ref="hg38", models=str(models_dir), pop=True,
     )
     dicast.score_variants(["INS"], args, "S1")
 
@@ -564,9 +578,10 @@ def test_score_variants_pop_flag_only_applies_to_del_and_ins(tmp_path, monkeypat
     models_dir = tmp_path / "models"
     models_dir.mkdir()
     (models_dir / "dicast_DUP_pop.json").write_text("{}")
+    (tmp_path / "output").mkdir()
 
     args = SimpleNamespace(
-        workdir=str(tmp_path), ref="hg38", models=str(models_dir), pop=True,
+        command="call", workdir=str(tmp_path), ref="hg38", models=str(models_dir), pop=True,
     )
     dicast.score_variants(["DUP"], args, "S1")
 
@@ -592,8 +607,9 @@ def test_call_pipeline_end_to_end_on_demo_data(tmp_path):
     the coverage-outlier filter (cov_thr=5); see tests/data/README.md's "Why
     the variant loci are downsampled this hard" for the full explanation.
 
-    All outputs, including the DQ-tagged `*.dicast.vcf`, land in `--workdir`,
-    so the repo's own tests/data/ inputs can be used in place.
+    All outputs, including the DQ-tagged `*.dicast.vcf` and the merged VCF,
+    land in `--workdir/output`, so the repo's own tests/data/ inputs can be
+    used in place.
     """
     workdir = tmp_path / "workdir"
     workdir.mkdir()
@@ -618,7 +634,14 @@ def test_call_pipeline_end_to_end_on_demo_data(tmp_path):
         f"dicast.py call exited {result.returncode}\n"
         f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
 
-    scores_path = workdir / "demo_hg38.SVs.dicast.tsv"
+    # Full workdir tree matches the layout spec: input/, features/{ref,aln},
+    # features/*.annot.tsv, output/{scores tsv, per-caller DQ vcf, merged vcf}.
+    assert (workdir / "input" / "demo_hg38.SVs.raw.tsv").is_file()
+    assert (workdir / "features" / "ref" / "demo_hg38.SVs.ref.tsv").is_file()
+    assert (workdir / "features" / "demo_hg38.SVs.annot.tsv").is_file()
+    assert list((workdir / "features" / "aln").glob("demo_hg38.SVs.aln.ill.*.*.tsv"))
+
+    scores_path = workdir / "output" / "demo_hg38.SVs.dicast.tsv"
     assert scores_path.is_file()
     df = pd.read_csv(scores_path, sep="\t")
 
@@ -635,8 +658,9 @@ def test_call_pipeline_end_to_end_on_demo_data(tmp_path):
     assert df["dicast_qual"].between(0, 1).all()
 
     # The VCF got its DQ tags too, matching the scores TSV; the re-emitted
-    # VCF is written into --workdir, not next to the input.
-    dq_vcf_path = str(workdir / "demo_delly.dicast.vcf")
+    # VCF is written into --workdir/output, named after the sample + caller
+    # label (not the input filename -- see the workdir-restructure bug fix).
+    dq_vcf_path = str(workdir / "output" / "demo_delly.dicast.vcf")
     reader = vcfpy.Reader.from_path(dq_vcf_path)
     scores_by_id = dict(zip(df["id"], df["dicast_qual"]))
     seen = 0
@@ -645,3 +669,21 @@ def test_call_pipeline_end_to_end_on_demo_data(tmp_path):
         assert float(rec.INFO["DQ"]) == pytest.approx(scores_by_id[rec.ID[0]])
         seen += 1
     assert seen == 20
+
+    # Merged VCF: one record per cluster (best call across callers). With a
+    # single caller and well-separated demo loci, no two calls are expected
+    # to cluster, so this should come out ~= 20 records -- but assert only
+    # <= len(df) per the task brief (don't force an exact count if the real
+    # data happens to cluster something).
+    merged_vcf_path = workdir / "output" / "demo_hg38.SVs.dicast.merged.vcf"
+    assert merged_vcf_path.is_file()
+    merged_reader = vcfpy.Reader.from_path(str(merged_vcf_path))
+    merged_records = list(merged_reader)
+    assert 0 < len(merged_records) <= len(df)
+
+    contig_order = {c.id: i for i, c in enumerate(merged_reader.header.get_lines("contig"))}
+    sort_keys = [(contig_order[rec.CHROM], rec.POS) for rec in merged_records]
+    assert sort_keys == sorted(sort_keys)
+    for rec in merged_records:
+        assert rec.INFO["SVTYPE"] in ("DEL", "INS")
+        assert 0.0 <= float(rec.INFO["DQ"]) <= 1.0

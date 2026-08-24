@@ -93,13 +93,29 @@ all parameters and their defaults, run `dicast call --help` and
 
 ## Interpreting dicast output
 
-A run fills `--workdir` with intermediate and final files named
-`SAMPLE_REF.SVs.*` (`REF` defaults to `hg38`). The two you care about are the
-scores TSV and the DQ-tagged VCFs.
+A `call` run fills `--workdir` with a fixed tree of intermediate and final
+files, all named `SAMPLE_REF.SVs.*` (`REF` defaults to `hg38`):
+
+```
+WORKDIR/
+├── input/SAMPLE_REF.SVs.raw.tsv                      parsed input calls
+├── features/
+│   ├── ref/SAMPLE_REF.SVs.ref.tsv                    reference features
+│   ├── aln/SAMPLE_REF.SVs.aln.ill.CHROM.SVTYPE.tsv   alignment feature shards
+│   └── SAMPLE_REF.SVs.annot.tsv                      combined feature matrix
+└── output/
+    ├── SAMPLE_REF.SVs.dicast.tsv                     scores — the deliverable
+    ├── SAMPLE_CALLER.dicast.vcf                      per input caller, DQ-tagged
+    └── SAMPLE_REF.SVs.dicast.merged.vcf              merged best-per-cluster VCF
+```
+
+`multi` builds the exact same tree per sample, under `WORKDIR/SAMPLE/...`.
+The three files under `output/` are the ones you care about: the scores TSV,
+the DQ-tagged per-caller VCFs, and the merged VCF.
 
 ### The scores TSV
 
-**`SAMPLE_REF.SVs.dicast.tsv`** has one row per input call, for example:
+**`output/SAMPLE_REF.SVs.dicast.tsv`** has one row per input call, for example:
 
 ```
 id            cohort  sample  reference  technology  caller  sv_type  chrom  chrom_2  start     end       sv_len  filter  qual  dicast_qual  genotype
@@ -126,9 +142,10 @@ DEL00000003   none    demo    hg38       ill         delly   DEL      chr21  NA 
 
 ### The DQ-tagged VCFs
 
-Each caller's input VCF is re-emitted into `--workdir` as
-`<name>.dicast.vcf` (`.vcf`/`.vcf.gz` suffix replaced), with a new INFO
-field:
+Each caller's input VCF is re-emitted into `output/` as
+**`SAMPLE_CALLER.dicast.vcf`** (named after the sample and the `caller`
+label from `--vcfs`, not the input filename — so two callers whose input
+files happen to share a basename never collide), with a new INFO field:
 
 ```
 ##INFO=<ID=DQ,Number=1,Type=String,Description="Dicast Quality Score">
@@ -136,6 +153,19 @@ field:
 
 `DQ` carries the same `dicast_qual` value as the TSV; a record present in the
 VCF but missing from the scored TSV (filtered out upstream) gets `DQ=-1`.
+
+### Merged VCF
+
+**`output/SAMPLE_REF.SVs.dicast.merged.vcf`** collapses the scores TSV down
+to one call per real-world SV event: calls across all callers (and, in
+`multi` mode, rescued calls) are clustered per SV type — DEL/DUP/INV by
+>50% reciprocal breakpoint overlap, INS by <200bp breakpoint distance — and
+only the highest-`dicast_qual` call in each cluster survives, genotype
+included. Selection is population-aware: a `pav` population-catalog call
+only wins its cluster if no non-population caller call in that cluster
+reaches `dicast_qual >= 0.4`. It's a fresh, minimal VCF (not a merge of the
+input VCFs' headers) with a `CALLER` INFO tag naming which caller produced
+the winning call and a `DQ` INFO tag carrying its `dicast_qual`.
 
 ### Rescued calls
 

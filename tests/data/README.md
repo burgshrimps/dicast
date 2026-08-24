@@ -105,7 +105,7 @@ where every breakpoint/body coverage bin for all 20 calls stays at or below
 any particular locus. Verified end-to-end: running the "Quickstart" command
 above with this `demo.bam` produces a `dicast_qual` score for all 20 calls
 (range 0.002-0.726 with the shipped models) in
-`demo_out/demo_hg38.SVs.dicast.tsv`.
+`demo_out/output/demo_hg38.SVs.dicast.tsv`.
 
 ### `demo_delly.vcf.gz` — 20 real HG002 chr21 DEL/INS calls, reformatted as delly output
 

@@ -50,6 +50,7 @@ from dicast.collect_reference import ReferenceAnnotator
 from dicast.collect_illumina import AlignmentAnnotatorIllumina
 from dicast.model import Dicast
 from dicast.multi import find_rescue_candidates
+from dicast.merge import build_merged_vcf
 
 # Suppresses stacked htslib warnings when a BAM/CRAM index predates the alignment file.
 pysam.set_verbosity(0)
@@ -64,26 +65,88 @@ chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8',
 sv_types = ['DEL', 'DUP', 'INS', 'INV']
 
 
-def combine_feature_files(sample: str, ref: str, workdir: str) -> pd.DataFrame:
+def sample_root(command: str, workdir: str, sample: str) -> str:
+    """ Root directory of one sample's workdir subtree.
+
+    `call` writes straight into `--workdir`; `multi` gives each sample its
+    own `--workdir/<sample>` subtree so same-named files from different
+    samples never collide.
+
+    Args:
+        command (str): 'call' or 'multi'
+        workdir (str): The --workdir argument
+        sample (str): Sample name
+
+    Returns:
+        str: Root directory for this sample's input/features/output tree
+    """
+
+    if command == 'multi':
+        return os.path.join(workdir, sample)
+    return workdir
+
+
+def build_paths(root: str, sample: str, ref: str) -> dict:
+    """ Builds the fixed input/features/output paths for one sample.
+
+    Args:
+        root (str): Sample root directory, as returned by sample_root()
+        sample (str): Sample name
+        ref (str): Reference genome name
+
+    Returns:
+        dict: Every fixed file/directory path for this sample
+    """
+
+    prefix = f'{sample}_{ref}'
+    input_dir = os.path.join(root, 'input')
+    features_dir = os.path.join(root, 'features')
+    ref_dir = os.path.join(features_dir, 'ref')
+    aln_dir = os.path.join(features_dir, 'aln')
+    output_dir = os.path.join(root, 'output')
+    return {
+        'prefix': prefix,
+        'input_dir': input_dir,
+        'features_dir': features_dir,
+        'ref_dir': ref_dir,
+        'aln_dir': aln_dir,
+        'output_dir': output_dir,
+        'raw': os.path.join(input_dir, f'{prefix}.SVs.raw.tsv'),
+        'ref': os.path.join(ref_dir, f'{prefix}.SVs.ref.tsv'),
+        'annot': os.path.join(features_dir, f'{prefix}.SVs.annot.tsv'),
+        'dicast': os.path.join(output_dir, f'{prefix}.SVs.dicast.tsv'),
+        'merged_vcf': os.path.join(output_dir, f'{prefix}.SVs.dicast.merged.vcf'),
+    }
+
+
+def aln_shard_path(paths: dict, chrom: str, sv_type: str) -> str:
+    """ Path of one alignment-feature shard TSV (per chromosome, per SV type). """
+
+    return os.path.join(paths['aln_dir'], f"{paths['prefix']}.SVs.aln.ill.{chrom}.{sv_type}.tsv")
+
+
+def combine_feature_files(sample: str, ref: str, root: str) -> pd.DataFrame:
     """ Combines raw, reference and alignment features into a single TSV file.
 
     Args:
         sample (str): Sample name
         ref (str): Reference genome name
-        workdir (str): Working directory
+        root (str): Sample root directory (see sample_root())
 
     Returns:
         pd.DataFrame: DataFrame with combined features
-    """    
+    """
 
-    df_raw = pd.read_csv(f'{workdir}/{sample}_{ref}.SVs.raw.tsv', sep='\t', low_memory=False,
+    paths = build_paths(root, sample, ref)
+
+    df_raw = pd.read_csv(paths['raw'], sep='\t', low_memory=False,
                          dtype={'sample': str, 'cohort_samples': str})
-    df_ref = pd.read_csv(f'{workdir}/{sample}_{ref}.SVs.ref.tsv', sep='\t', low_memory=False)
-    
-    filenames_aln_ill = glob(f'{workdir}/{sample}_{ref}.SVs.aln.ill.*.*.tsv')
-    
+    df_ref = pd.read_csv(paths['ref'], sep='\t', low_memory=False)
+
+    filenames_aln_ill = glob(os.path.join(paths['aln_dir'], f"{paths['prefix']}.SVs.aln.ill.*.*.tsv"))
+
     df_aln_ill = pd.concat([pd.read_csv(f, sep='\t') for f in filenames_aln_ill], ignore_index=True)
-    
+
     df = df_raw.merge(df_ref.drop(['sample', 'sv_type', 'chrom', 'chrom_2', 'start', 'end', 'cohort', 'technology', 'caller', 'reference'], axis=1), on='id', how='inner')
     df = df.merge(df_aln_ill.drop(['sample', 'sv_type', 'chrom', 'chrom_2', 'start', 'end', 'sv_len', 'cohort', 'technology', 'caller', 'reference'], axis=1), on='id', how='inner')
 
@@ -95,9 +158,12 @@ def add_info_tag_to_vcf(arguments: argparse.Namespace):
 
     Args:
         arguments (argparse.Namespace): Parsed command line arguments
-    """    
+    """
 
-    dicast_df = pd.read_csv(f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.dicast.tsv', sep='\t',
+    root = sample_root(arguments.command, arguments.workdir, arguments.sample)
+    paths = build_paths(root, arguments.sample, arguments.ref)
+
+    dicast_df = pd.read_csv(paths['dicast'], sep='\t',
                             dtype={'sample': str, 'cohort_samples': str})
 
     for caller, vcf_filename in arguments.vcfs:
@@ -106,8 +172,10 @@ def add_info_tag_to_vcf(arguments: argparse.Namespace):
                                                  ('Number', '1'),
                                                  ('Type', 'String'),
                                                  ('Description', 'Dicast Quality Score')]))
-        vcf_basename_out = os.path.basename(vcf_filename).replace('.vcf', '.dicast.vcf').replace('.gz', '')
-        vcf_filename_out = os.path.join(arguments.workdir, vcf_basename_out)
+        # Named after the caller label, not the input filename -- two callers
+        # whose input files happen to share a basename would otherwise
+        # silently overwrite each other's output.
+        vcf_filename_out = os.path.join(paths['output_dir'], f'{arguments.sample}_{caller}.dicast.vcf')
         vcf_out = vcfpy.Writer.from_path(vcf_filename_out, vcf_in.header)
 
         dicast_df_caller = dicast_df[dicast_df['caller']== caller].copy().reset_index(drop=True)
@@ -121,7 +189,7 @@ def add_info_tag_to_vcf(arguments: argparse.Namespace):
 
             rec.INFO['DQ'] = str(qual_dicast)
             vcf_out.write_record(rec)
-            
+
         logging.info(
             f'Added DQ tag to {caller} VCF file')
 
@@ -132,8 +200,8 @@ def extract_reference_features(arguments: argparse.Namespace, sample: str):
     Args:
         arguments (argparse.Namespace): Parsed command line arguments
         sample (str): Sample name
-    """    
-    
+    """
+
     reference_filenames = {
             'repeats_filename' : arguments.repeats,
             'vntrs_filename' : arguments.vntrs,
@@ -144,9 +212,12 @@ def extract_reference_features(arguments: argparse.Namespace, sample: str):
             'alt_haps_filename' : arguments.althaps,
             'gc_filename' : arguments.gc
     }
-    
+
+    root = sample_root(arguments.command, arguments.workdir, sample)
+    paths = build_paths(root, sample, arguments.ref)
+
     RA = ReferenceAnnotator(reference_filenames)
-    RA.load_from_csv('/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.raw.tsv']))
+    RA.load_from_csv(paths['raw'])
     RA.split_bnd()
     logging.info('# Annotation Repeats')
     RA.annotate_repeats()
@@ -167,7 +238,7 @@ def extract_reference_features(arguments: argparse.Namespace, sample: str):
     logging.info('# Aggregate Results')
     RA.aggregate_results()
     logging.info('# Save Reference Features')
-    RA.to_csv('/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.ref.tsv']))
+    RA.to_csv(paths['ref'])
 
 
 def collect_aln_features(bam_filename: str, variant_filename: str, variant_annot_filename: str, chrom: str, sv_type: str, sample: str):
@@ -201,7 +272,9 @@ def score_variants(sv_types: list, arguments: argparse.Namespace, sample: str):
         sample (str): Sample name
     """    
 
-    variant_features_filename = f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.annot.tsv'
+    root = sample_root(arguments.command, arguments.workdir, sample)
+    paths = build_paths(root, sample, arguments.ref)
+    variant_features_filename = paths['annot']
     use_pop_models = getattr(arguments, 'pop', False)
     dicast_dfs = []
     for sv_type in sv_types:
@@ -226,7 +299,7 @@ def score_variants(sv_types: list, arguments: argparse.Namespace, sample: str):
             dicast.score_inversions()
             dicast_dfs.append(dicast.to_df())
     dicast_df = pd.concat([df for df in dicast_dfs if not df.empty], ignore_index=True)
-    dicast_df.to_csv(f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.dicast.tsv', sep='\t', index=False, na_rep='NA')
+    dicast_df.to_csv(paths['dicast'], sep='\t', index=False, na_rep='NA')
 
 
 def main():
@@ -329,19 +402,19 @@ def main():
 
                 # Alignment Feature Collection
                 logging.info(f'# Collect Alignment Features')
+                paths = build_paths(arguments.workdir, arguments.sample, arguments.ref)
                 parallel_input = []
                 for sv_type in sv_types:
                     for chrom in chroms:
-                        variant_filename = '/'.join([arguments.workdir, arguments.sample + '_' + arguments.ref + '.SVs.raw.tsv'])
-                        variant_annot_filename = '/'.join([arguments.workdir, arguments.sample + '_' + arguments.ref + '.SVs.aln.ill.' + chrom + '.' + sv_type + '.tsv'])
-                        parallel_input.append((arguments.bam, variant_filename, variant_annot_filename,
+                        variant_annot_filename = aln_shard_path(paths, chrom, sv_type)
+                        parallel_input.append((arguments.bam, paths['raw'], variant_annot_filename,
                                             chrom, sv_type, arguments.sample))
                 Parallel(n_jobs=arguments.threads)(delayed(collect_aln_features)(*args) for args in parallel_input)
 
                 # Combination of Raw, Reference and Alignment Features
                 logging.info('# Combination Output Files')
                 df = combine_feature_files(arguments.sample, arguments.ref, arguments.workdir)
-                df.to_csv(f'{arguments.workdir}/{arguments.sample}_{arguments.ref}.SVs.annot.tsv', sep='\t', index=False, na_rep='NA')
+                df.to_csv(paths['annot'], sep='\t', index=False, na_rep='NA')
 
             with stage_timer('prediction', benchmark_rows):
                 # Variant Prediction
@@ -351,6 +424,12 @@ def main():
                 # Add Info Tag to VCF
                 logging.info('# Add Info Tag to VCF')
                 add_info_tag_to_vcf(arguments)
+
+                # Merged VCF (best call per cluster across callers)
+                logging.info('# Build Merged VCF')
+                merged_count, input_count = build_merged_vcf(
+                    paths['dicast'], paths['merged_vcf'], arguments.sample, arguments.fai)
+                logging.info(f'Merged VCF: {merged_count} calls (from {input_count} scored calls) -> {paths["merged_vcf"]}')
         finally:
             _write_benchmark()
 
@@ -418,9 +497,12 @@ def main():
             with stage_timer('feature_collection', benchmark_rows):
                 # Variant Preparation: each sample's own caller variants first
                 own_variant_dfs = {}
+                sample_paths = {}
                 for sample in samples:
                     logging.info(f'# Create Variant DataFrame for {sample}')
-                    VP = VariantPrep(arguments.cohort, arguments.ref, arguments.workdir,
+                    root = sample_root(arguments.command, arguments.workdir, sample)
+                    sample_paths[sample] = build_paths(root, sample, arguments.ref)
+                    VP = VariantPrep(arguments.cohort, arguments.ref, root,
                                      arguments.technology, chroms, arguments.fai, sv_types)
                     VP.read_vcf(vcfs_by_sample[sample], sample)
                     VP.read_variants()
@@ -437,7 +519,7 @@ def main():
                 for sample in samples:
                     df_sample = pd.concat([own_variant_dfs[sample], rescue_dfs[sample]], ignore_index=True)
                     logging.info(f'# Save Variants for {sample} ({len(own_variant_dfs[sample])} own, {len(rescue_dfs[sample])} rescued)')
-                    df_sample.to_csv(f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.raw.tsv', sep='\t', index=False, na_rep='NA')
+                    df_sample.to_csv(sample_paths[sample]['raw'], sep='\t', index=False, na_rep='NA')
 
                 # Reference Feature Collection
                 for sample in samples:
@@ -450,17 +532,17 @@ def main():
                 for sample in samples:
                     for sv_type in sv_types:
                         for chrom in chroms:
-                            variant_filename = '/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.raw.tsv'])
-                            variant_annot_filename = '/'.join([arguments.workdir, sample + '_' + arguments.ref + '.SVs.aln.ill.' + chrom + '.' + sv_type + '.tsv'])
-                            parallel_input.append((bam_dict[sample], variant_filename, variant_annot_filename,
+                            variant_annot_filename = aln_shard_path(sample_paths[sample], chrom, sv_type)
+                            parallel_input.append((bam_dict[sample], sample_paths[sample]['raw'], variant_annot_filename,
                                                 chrom, sv_type, sample))
                 Parallel(n_jobs=arguments.threads)(delayed(collect_aln_features)(*args) for args in parallel_input)
 
                 # Combination of Raw, Reference and Alignment Features
                 logging.info('# Combination Output Files')
                 for sample in samples:
-                    df = combine_feature_files(sample, arguments.ref, arguments.workdir)
-                    df.to_csv(f'{arguments.workdir}/{sample}_{arguments.ref}.SVs.annot.tsv', sep='\t', index=False, na_rep='NA')
+                    root = sample_root(arguments.command, arguments.workdir, sample)
+                    df = combine_feature_files(sample, arguments.ref, root)
+                    df.to_csv(sample_paths[sample]['annot'], sep='\t', index=False, na_rep='NA')
 
             with stage_timer('prediction', benchmark_rows):
                 for sample in samples:
@@ -473,6 +555,12 @@ def main():
                     arguments.sample = sample
                     arguments.vcfs = vcfs_by_sample[sample]
                     add_info_tag_to_vcf(arguments)
+
+                    # Merged VCF (best call per cluster across callers)
+                    logging.info(f'# Build Merged VCF for {sample}')
+                    merged_count, input_count = build_merged_vcf(
+                        sample_paths[sample]['dicast'], sample_paths[sample]['merged_vcf'], sample, arguments.fai)
+                    logging.info(f'Merged VCF for {sample}: {merged_count} calls (from {input_count} scored calls) -> {sample_paths[sample]["merged_vcf"]}')
         finally:
             _write_benchmark()
 

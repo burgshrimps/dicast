@@ -110,7 +110,7 @@ class VariantPrep:
 
 
     def save_variants(self):
-        """ Saves variants dataframe to file. """
-        
+        """ Saves variants dataframe to file, under workdir/input/. """
+
         filename = self.sample + '_' + self.ref + '.SVs.raw.tsv'
-        self.df_variants.to_csv('/'.join([self.workdir, filename]), index=False, sep='\t', na_rep='NA')
+        self.df_variants.to_csv('/'.join([self.workdir, 'input', filename]), index=False, sep='\t', na_rep='NA')
