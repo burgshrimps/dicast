@@ -35,22 +35,6 @@ downloads once (~2.1 GB; press Enter to accept the suggested location, the
 repo's `annot/` folder) and reuses them from then on. `--models` defaults to
 the `models/` directory shipped in this repo.*
 
-**Demo (zero downloads):** a self-contained chr21 demo with real HG002 reads
-and calls runs the whole pipeline in seconds:
-
-```bash
-dicast call \
-    --sample demo --workdir demo_out \
-    --fai tests/data/hg38.fa.fai \
-    --bam tests/data/demo.bam \
-    --vcfs delly=tests/data/demo_delly.vcf.gz \
-    --annot-dir tests/data/annot \
-    --chrom chr21 --sv_types DEL INS --threads 2
-```
-
-See `tests/data/README.md` for how the demo dataset was built and why its
-coverage is artificially downsampled at the variant loci.
-
 **Single sample:**
 
 ```bash
@@ -113,8 +97,7 @@ scores TSV and the DQ-tagged VCFs.
 
 ### The scores TSV
 
-**`SAMPLE_REF.SVs.dicast.tsv`** has one row per input call. The demo, for
-example, produces rows like:
+**`SAMPLE_REF.SVs.dicast.tsv`** has one row per input call, for example:
 
 ```
 id            cohort  sample  reference  technology  caller  sv_type  chrom  chrom_2  start     end       sv_len  filter  qual  dicast_qual  genotype
