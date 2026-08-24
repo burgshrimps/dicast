@@ -20,7 +20,7 @@ The shipped annotations and models are hg38-specific.
 
 ## Installation
 
-With conda (or mamba — swap the command accordingly):
+With conda (or mamba; swap the command accordingly):
 
 ```bash
 git clone https://github.com/burgshrimps/dicast.git
@@ -57,7 +57,7 @@ dicast call \
 shows up in the output `caller` column and decides which re-emitted VCF gets
 which scores.
 
-**Multiple samples (e.g. a trio) with cross-sample rescue** — every sample is
+**Multiple samples (e.g. a trio) with cross-sample rescue:** every sample is
 additionally scored on calls that only the *other* samples' callers found
 (see [Rescued calls](#rescued-calls)); at least two samples are required:
 
@@ -107,7 +107,7 @@ WORKDIR/
 │   ├── aln/SAMPLE_REF.SVs.aln.ill.CHROM.SVTYPE.tsv   alignment feature shards
 │   └── SAMPLE_REF.SVs.annot.tsv                      combined feature matrix
 └── output/
-    ├── SAMPLE_REF.SVs.dicast.tsv                     scores — the deliverable
+    ├── SAMPLE_REF.SVs.dicast.tsv                     scores (the deliverable)
     ├── SAMPLE_CALLER.dicast.vcf                      per input caller, DQ-tagged
     └── SAMPLE_REF.SVs.dicast.merged.vcf              merged best-per-cluster VCF
 ```
@@ -147,7 +147,7 @@ DEL00000003   none    demo    hg38       ill         delly   DEL      chr21  NA 
 
 Each caller's input VCF is re-emitted into `output/` as
 **`SAMPLE_CALLER.dicast.vcf`** (named after the sample and the `caller`
-label from `--vcfs`, not the input filename — so two callers whose input
+label from `--vcfs`, not the input filename, so two callers whose input
 files happen to share a basename never collide), with a new INFO field:
 
 ```
@@ -161,8 +161,8 @@ VCF but missing from the scored TSV (filtered out upstream) gets `DQ=-1`.
 
 **`output/SAMPLE_REF.SVs.dicast.merged.vcf`** collapses the scores TSV down
 to one call per real-world SV event: calls across all callers (and, in
-`multi` mode, rescued calls) are clustered per SV type — DEL/DUP by
->50% reciprocal breakpoint overlap, INS by <200bp breakpoint distance — and
+`multi` mode, rescued calls) are clustered per SV type (DEL/DUP by
+>50% reciprocal breakpoint overlap, INS by <200bp breakpoint distance), and
 only the highest-`dicast_qual` call in each cluster survives, genotype
 included. Selection is population-aware: a `pav` population-catalog call
 only wins its cluster if no non-population caller call in that cluster
@@ -174,7 +174,7 @@ the winning call and a `DQ` INFO tag carrying its `dicast_qual`.
 
 In `multi` mode, calls found in one sample but missing from another sample's
 own callers are transplanted into that sample's candidate set and scored
-against its own BAM — recovering calls the sample's callers missed but that
+against its own BAM, recovering calls the sample's callers missed but that
 show up as real signal once you actually look at that sample's reads.
 Rescued rows are distinguishable by their `caller` value:
 `rescue:<origin sample>:<origin caller>` (e.g. a deletion found only by the
@@ -213,7 +213,7 @@ dicast's feature engineering depends on eight hg38 annotation files:
 | `hg38_alt_haps.tsv` | UCSC Genome Browser alternative-haplotype track |
 | `hg38_gc_content.bw` | GC-content BigWig |
 
-None of these are tracked in git — they are release assets, and dicast
+None of these are tracked in git; they are release assets, and dicast
 downloads the ones it needs automatically on first use (~2.1 GB total,
 checksum-verified, one time), asking once where to store them. Set the
 `DICAST_DATA_DIR` environment variable to fix the location, run
