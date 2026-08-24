@@ -41,14 +41,14 @@ and calls runs the whole pipeline in seconds:
 ```bash
 dicast call \
     --sample demo --workdir demo_out \
-    --fai test_data/hg38.fa.fai \
-    --bam test_data/demo.bam \
-    --vcfs delly=test_data/demo_delly.vcf.gz \
-    --annot-dir test_data/annot \
+    --fai tests/data/hg38.fa.fai \
+    --bam tests/data/demo.bam \
+    --vcfs delly=tests/data/demo_delly.vcf.gz \
+    --annot-dir tests/data/annot \
     --chrom chr21 --sv_types DEL INS --threads 2
 ```
 
-See `test_data/README.md` for how the demo dataset was built and why its
+See `tests/data/README.md` for how the demo dataset was built and why its
 coverage is artificially downsampled at the variant loci.
 
 **Single sample:**

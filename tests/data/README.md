@@ -1,4 +1,4 @@
-# test_data — dicast quickstart demo dataset
+# tests/data — dicast quickstart demo dataset
 
 A small, self-contained chr21-only dataset so `dicast call` runs
 end-to-end with zero user-supplied inputs (used by CI and by anyone trying
@@ -6,7 +6,7 @@ dicast for the first time). Everything here is derived from public GIAB
 (Genome in a Bottle) HG002 resources — no synthetic reads.
 
 ```
-test_data/
+tests/data/
 ├── demo.bam / demo.bam.bai       Illumina alignments, chr21 only, full hg38 header
 ├── demo_delly.vcf.gz / .tbi      20 DEL/INS calls formatted as delly output
 ├── hg38.fa.fai                   standard GCA_000001405.15 hg38 no-alt .fai
@@ -18,10 +18,10 @@ test_data/
 ```
 dicast call \
     --sample demo --workdir demo_out \
-    --fai test_data/hg38.fa.fai \
-    --bam test_data/demo.bam \
-    --vcfs delly=test_data/demo_delly.vcf.gz \
-    --annot-dir test_data/annot \
+    --fai tests/data/hg38.fa.fai \
+    --bam tests/data/demo.bam \
+    --vcfs delly=tests/data/demo_delly.vcf.gz \
+    --annot-dir tests/data/annot \
     --chrom chr21 --sv_types DEL INS --threads 2
 ```
 
@@ -164,7 +164,7 @@ five are copied unchanged:
 | --- | --- | --- |
 | `hg38_gc_content.bw` | sliced to chr21 (pyBigWig: read all chr21 intervals from the source, write a fresh bigWig with only the chr21 header entry) | full genome-wide file is ~1.7 GB |
 | `hg38_repeatmasker.tsv` | sliced to chr21 (`awk -F'\t' '$6=="chr21"'`, header kept) | full file is ~460 MB |
-| `hg38_strs_chaisson.bed` | sliced to chr21 (`awk -F'\t' '$1=="chr21"'`) | **deviation from "copy the 6 small files unchanged"**: at ~27 MB genome-wide, keeping it whole plus the ~28 MB chr21 GC bigWig alone would already exceed the 50 MB test_data budget before the BAM/VCF/other annotations are even counted. Chr21-slicing it costs nothing downstream — every annotation lookup (`ReferenceAnnotator.annotate_strs` in `dicast/collect_reference.py`) only ever queries `chrom == 'chr21'` in this dataset. |
+| `hg38_strs_chaisson.bed` | sliced to chr21 (`awk -F'\t' '$1=="chr21"'`) | **deviation from "copy the 6 small files unchanged"**: at ~27 MB genome-wide, keeping it whole plus the ~28 MB chr21 GC bigWig alone would already exceed the 50 MB tests/data budget before the BAM/VCF/other annotations are even counted. Chr21-slicing it costs nothing downstream — every annotation lookup (`ReferenceAnnotator.annotate_strs` in `dicast/collect_reference.py`) only ever queries `chrom == 'chr21'` in this dataset. |
 | `hg38_alt_haps.tsv` | copied unchanged | 1.5 MB whole-genome, well within budget |
 | `hg38_asmb_gaps.tsv` | copied unchanged | 43 KB |
 | `hg38_centromeres.tsv` | copied unchanged | 4 KB |
@@ -174,7 +174,7 @@ five are copied unchanged:
 `.gitignore` only ignores `annot/hg38_gc_content.bw` and
 `annot/hg38_repeatmasker.tsv` at the repo root (the pattern contains a slash
 so it's anchored to the top-level `annot/` directory per gitignore rules) —
-`test_data/annot/*` is unaffected and commits normally.
+`tests/data/annot/*` is unaffected and commits normally.
 
 ## Regenerating
 
@@ -188,14 +188,14 @@ SVURL="https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/data/AshkenazimT
 FAIURL="https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.fai"
 
 # .fai
-curl -s -o test_data/hg38.fa.fai "$FAIURL"
+curl -s -o tests/data/hg38.fa.fai "$FAIURL"
 
 # candidate variants: SVTYPE DEL/INS, FILTER=., GT=1|1, 80<=|SVLEN|<=2500,
 # spaced >=300kb apart on chr21 (see this dataset's generation script for the
 # exact selection + coverage-check logic); reformatted into demo_delly.vcf,
 # then:
-bgzip -c test_data_work/demo_delly.vcf > test_data/demo_delly.vcf.gz
-tabix -p vcf test_data/demo_delly.vcf.gz
+bgzip -c tests/data_work/demo_delly.vcf > tests/data/demo_delly.vcf.gz
+tabix -p vcf tests/data/demo_delly.vcf.gz
 
 # BAM: fetch variant-locus windows at full native depth, downsample them to
 # ~1-2x (see "Why the variant loci are downsampled this hard" above),
@@ -205,20 +205,20 @@ samtools view -b -o variants.bam "$BAMURL" chr21:REGION1 chr21:REGION2 ...
 samtools view -b -s 4.004 -o variants_ds.bam variants.bam
 samtools view -b -s 42.07 -o bg.bam "$BAMURL" chr21:BGREGION1 chr21:BGREGION2 ...
 samtools cat -o combined.bam variants_ds.bam bg.bam
-samtools sort -o test_data/demo.bam combined.bam
-samtools index test_data/demo.bam
+samtools sort -o tests/data/demo.bam combined.bam
+samtools index tests/data/demo.bam
 
 # annot/
-awk -F'\t' 'NR==1 || $6=="chr21"' annot/hg38_repeatmasker.tsv > test_data/annot/hg38_repeatmasker.tsv
-awk -F'\t' '$1=="chr21"' annot/hg38_strs_chaisson.bed > test_data/annot/hg38_strs_chaisson.bed
+awk -F'\t' 'NR==1 || $6=="chr21"' annot/hg38_repeatmasker.tsv > tests/data/annot/hg38_repeatmasker.tsv
+awk -F'\t' '$1=="chr21"' annot/hg38_strs_chaisson.bed > tests/data/annot/hg38_strs_chaisson.bed
 cp annot/hg38_alt_haps.tsv annot/hg38_asmb_gaps.tsv annot/hg38_centromeres.tsv \
-   annot/hg38_cpg_islands.tsv annot/hg38_vntrs_chaisson.bed test_data/annot/
+   annot/hg38_cpg_islands.tsv annot/hg38_vntrs_chaisson.bed tests/data/annot/
 python3 -c "
 import pyBigWig
 bw = pyBigWig.open('annot/hg38_gc_content.bw')
 n = bw.chroms('chr21')
 ivs = bw.intervals('chr21')
-out = pyBigWig.open('test_data/annot/hg38_gc_content.bw', 'w')
+out = pyBigWig.open('tests/data/annot/hg38_gc_content.bw', 'w')
 out.addHeader([('chr21', n)])
 out.addEntries(['chr21']*len(ivs), [i[0] for i in ivs], ends=[i[1] for i in ivs], values=[float(i[2]) for i in ivs])
 out.close()
@@ -228,7 +228,7 @@ out.close()
 ## File sizes
 
 ```
-test_data/                          ~39.6 MB total
+tests/data/                          ~39.6 MB total
 ├── demo.bam                        1.5 MB
 ├── demo.bam.bai                    46 KB
 ├── demo_delly.vcf.gz(.tbi)         1.4 KB

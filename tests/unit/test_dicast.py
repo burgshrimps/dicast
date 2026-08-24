@@ -16,7 +16,7 @@ Synthetic inputs (feature TSVs, scores TSV, a vcfpy-parseable VCF) are built in
 derived from what the test writes, never from running the function first.
 
 One integration test at the bottom runs the real ``call`` pipeline end-to-end
-(no mocks) against the shipped ``test_data/`` chr21 demo dataset.
+(no mocks) against the shipped ``tests/data/`` chr21 demo dataset.
 
 Dropped vs. the older lucid/dicast dev line's test_dicast.py
 --------------------------------------------------------------
@@ -46,7 +46,7 @@ New coverage added for this repo
   sample name or a numeric-looking value would be silently re-typed by
   pandas' inference.
 * An end-to-end integration test running ``python3 -m dicast call`` on the
-  real ``test_data/`` demo dataset (chr21, 20 real HG002 DEL/INS calls,
+  real ``tests/data/`` demo dataset (chr21, 20 real HG002 DEL/INS calls,
   caller label ``delly``).
 """
 from __future__ import annotations
@@ -577,7 +577,7 @@ def test_score_variants_pop_flag_only_applies_to_del_and_ins(tmp_path, monkeypat
 # Integration: the real `call` pipeline end-to-end on the shipped demo data.
 # ===========================================================================
 
-TEST_DATA_DIR = REPO_DIR / "test_data"
+TEST_DATA_DIR = REPO_DIR / "tests/data"
 
 
 @pytest.mark.integration
@@ -589,11 +589,11 @@ def test_call_pipeline_end_to_end_on_demo_data(tmp_path):
 
     Runtime is a few seconds -- the demo BAM is intentionally downsampled at
     each of the 20 variant loci to ~1-2x specifically so no call is dropped by
-    the coverage-outlier filter (cov_thr=5); see test_data/README.md's "Why
+    the coverage-outlier filter (cov_thr=5); see tests/data/README.md's "Why
     the variant loci are downsampled this hard" for the full explanation.
 
     All outputs, including the DQ-tagged `*.dicast.vcf`, land in `--workdir`,
-    so the repo's own test_data/ inputs can be used in place.
+    so the repo's own tests/data/ inputs can be used in place.
     """
     workdir = tmp_path / "workdir"
     workdir.mkdir()
