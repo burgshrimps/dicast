@@ -1,5 +1,10 @@
 ![dicast](docs/img/dicast-banner.png)
 
+**dicast**: a machine learning method for accurate detection of structural
+variants from short-read sequencing data
+
+---
+
 [![CI](https://github.com/burgshrimps/dicast/actions/workflows/ci.yml/badge.svg)](https://github.com/burgshrimps/dicast/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10-blue.svg)](environment.yml)
