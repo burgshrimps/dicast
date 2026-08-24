@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: dicast
-Version: 1.0.0
-Summary: Confidence scoring for structural-variant calls from short-read sequencing
-License: GPL-3.0-only
-Project-URL: Repository, https://github.com/burgshrimps/dicast
-Requires-Python: >=3.10
-License-File: LICENSE
-Dynamic: license-file
