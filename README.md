@@ -6,17 +6,17 @@
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10-blue.svg)](environment.yml)
 
-**dicast** is a tool for scoring the confidence of structural variant (SV)
-calls made by other SV callers (delly, manta, lumpy, cnvnator, gridss, or any
-caller that emits a standard SV VCF). Given a coordinate-sorted, indexed
-Illumina BAM plus one or more per-caller VCFs, it extracts alignment and
-reference-context features around each call's breakpoints and scores it with
-a pretrained XGBoost model, one model per SV type (DEL, DUP, INS). Every call gets a `dicast_qual` score in `[0, 1]`,
-written as a column in a combined TSV and as a `DQ` INFO tag in re-emitted
-VCFs. dicast is caller-agnostic (caller names are free-text labels), can
-score several samples together with cross-sample rescue (e.g. trios), and
-has a population mode that folds a PAV population catalog into the scoring.
-The shipped annotations and models are hg38-specific.
+**dicast** is a machine learning method for determining whether a structural
+variant (SV) call is a real variant or a likely false-positive artefact. For
+every input variant (we recommend combining several SV callers, see below),
+dicast builds an internal representation from over 100 features describing
+the genomic context and the alignment signal around the variant's
+breakpoints, and scores it with a pretrained XGBoost model, one per SV type
+(DEL, DUP, INS). Every variant receives a confidence score in `[0, 1]`,
+written to a combined TSV and as a `DQ` INFO tag in re-emitted VCFs. We show
+that this approach outperforms individual SV callers as well as commonly
+used consensus approaches. The shipped annotations and models are
+hg38-specific.
 
 ## Installation
 
