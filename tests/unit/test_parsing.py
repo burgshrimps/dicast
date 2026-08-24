@@ -1,4 +1,4 @@
-"""Unit tests for ``dicast_lib/parsing.py``.
+"""Unit tests for ``dicast/parsing.py``.
 
 This repo's CLI differs substantially from the older lucid/dicast dev line this
 module was ported from:
@@ -29,7 +29,7 @@ import os
 
 import pytest
 
-from dicast_lib import parsing
+from dicast import parsing
 
 
 # ---------------------------------------------------------------------------

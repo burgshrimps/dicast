@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 import sys
 
-from dicast_lib.utils import replace_filename
+from dicast.utils import replace_filename
 
 class ReferenceAnnotator:
     """ Object to annotate a set of SV calls based on features obtained from a reference genome. """

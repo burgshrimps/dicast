@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`dicast_lib.collect_reference`.
+"""Unit tests for :mod:`dicast.collect_reference`.
 
 Two complementary strategies are used:
 
@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dicast_lib.collect_reference import ReferenceAnnotator
+from dicast.collect_reference import ReferenceAnnotator
 from tests.fixtures import synthetic_reference as sref
 
 

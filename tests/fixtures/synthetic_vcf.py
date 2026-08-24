@@ -2,7 +2,7 @@
 
 This helper writes a tiny, bgzipped + tabix-indexed VCF into a caller-supplied
 directory (typically pytest's ``tmp_path``) and opens it with
-:class:`pysam.VariantFile`, so :func:`dicast_lib.utils.caller_vcf_to_dataframe`
+:class:`pysam.VariantFile`, so :func:`dicast.utils.caller_vcf_to_dataframe`
 can be exercised without any real data.
 
 The header declares every INFO / FORMAT field the parser reads so that field
@@ -35,8 +35,8 @@ NOTE: the older dicast dev line also had a ``sample_vcf_to_dataframe`` parser
 (for VCF-based cohort mode, with extra INFO fields CALLER / COHORT_AC /
 SUPP_SAMPLES / SUPP_SAMPLES_GT) and a matching ``make_sample_vcf`` builder
 here. This repo removed cohort VCF/CSV mode entirely (replaced by the
-``multi`` subcommand's cross-sample rescue in ``dicast_lib/multi.py``), and
-``dicast_lib/utils.py`` no longer defines ``sample_vcf_to_dataframe`` at all,
+``multi`` subcommand's cross-sample rescue in ``dicast/multi.py``), and
+``dicast/utils.py`` no longer defines ``sample_vcf_to_dataframe`` at all,
 so that builder and the INFO fields it alone needed are dropped here.
 """
 from __future__ import annotations
@@ -143,7 +143,7 @@ _CONTIG_ORDER = ["chr1", "chr2", "chr5", "chrUn"]
 
 def make_caller_vcf(tmp_path, name="caller.vcf"):
     """Write, bgzip + tabix-index, and open a synthetic VCF for
-    :func:`dicast_lib.utils.caller_vcf_to_dataframe`.
+    :func:`dicast.utils.caller_vcf_to_dataframe`.
 
     Returns an open :class:`pysam.VariantFile`.
     """

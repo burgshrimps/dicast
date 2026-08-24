@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`dicast_lib.utils`.
+"""Unit tests for :mod:`dicast.utils`.
 
 These cover the pure helpers (``compute_overlap``, ``cigartuples_to_array``,
 ``pad_alignment_matrices``, ``mad``, ``replace_filename``, ``read_parameters``)
@@ -13,13 +13,13 @@ raises ``TypeError`` before doing anything testable.
 
 NOTE on divergence from the older lucid/dicast dev line this was ported from:
 this repo removed cohort VCF/CSV mode entirely (replaced by the ``multi``
-subcommand's cross-sample rescue in ``dicast_lib/multi.py``), so
-``dicast_lib/utils.py`` no longer defines ``sample_vcf_to_dataframe`` at all.
+subcommand's cross-sample rescue in ``dicast/multi.py``), so
+``dicast/utils.py`` no longer defines ``sample_vcf_to_dataframe`` at all.
 All tests for that function (and its supporting ``make_sample_vcf`` fixture)
 are dropped -- see the module docstring in ``tests/fixtures/synthetic_vcf.py``
 for the matching fixture-side removal.
 
-``dicast_lib`` imports cleanly, so ``utils`` is imported directly. EXPECTED
+``dicast`` imports cleanly, so ``utils`` is imported directly. EXPECTED
 values for the VCF tests are derived from how the fixture is constructed
 (``tests/fixtures/synthetic_vcf.py``), never from running the parser first.
 """
@@ -31,15 +31,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dicast_lib import utils
+from dicast import utils
 from tests.fixtures import synthetic_vcf as sv
 
 
 # ---------------------------------------------------------------------------
 # read_parameters(file)  ->  json.load of the file
 #
-# This function is still defined in dicast_lib/utils.py, but a repo-wide grep
-# turned up no callers left in dicast_lib/ or dicast.py -- it looks like dead
+# This function is still defined in dicast/utils.py, but a repo-wide grep
+# turned up no callers left in dicast/ or dicast.py -- it looks like dead
 # code left over from a removed parameter-file workflow. It is still simple,
 # pure, and part of the module's public surface, so it is covered here as new
 # coverage rather than dropped.
@@ -375,7 +375,7 @@ def test_caller_vcf_filter_and_qual(tmp_path):
 # sample_vcf_to_dataframe -- DROPPED.
 #
 # This repo removed cohort VCF/CSV mode entirely (replaced by the `multi`
-# subcommand's cross-sample rescue in dicast_lib/multi.py); dicast_lib/utils.py
+# subcommand's cross-sample rescue in dicast/multi.py); dicast/utils.py
 # no longer defines sample_vcf_to_dataframe at all (confirmed by reading the
 # module and by a repo-wide grep turning up zero definitions). All tests that
 # exercised it in the lucid dev line -- keeps-only-canonical-supported-records,

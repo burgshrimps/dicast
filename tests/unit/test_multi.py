@@ -1,7 +1,7 @@
-"""Unit tests for ``dicast_lib/multi.py`` (cross-sample rescue for the ``multi``
+"""Unit tests for ``dicast/multi.py`` (cross-sample rescue for the ``multi``
 subcommand).
 
-The old ``lucid/dicast`` dev line's cohort mode (``dicast_lib/cohort.py``'s
+The old ``lucid/dicast`` dev line's cohort mode (``dicast/cohort.py``'s
 ``Cohort`` class: VCF/CSV/PED-driven ``find_overlapping_variants``,
 ``_create_vcf_record``, ``update_cohort_information``, ``get_missing_variants``)
 does not exist in this repo at all -- it was replaced wholesale by the
@@ -24,7 +24,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from dicast_lib.multi import find_rescue_candidates
+from dicast.multi import find_rescue_candidates
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ from dicast_lib.multi import find_rescue_candidates
 
 # Column set find_rescue_candidates / bf.closest actually touch. Mirrors the
 # subset of VariantPrep.get_variant_df()'s real columns (see
-# dicast_lib/utils.py:caller_vcf_to_dataframe) that the module reads.
+# dicast/utils.py:caller_vcf_to_dataframe) that the module reads.
 _VARIANT_COLS = ["sample", "id", "caller", "sv_type", "chrom", "start", "end", "sv_len", "qual"]
 
 
@@ -184,7 +184,7 @@ def test_ins_beyond_breakpoint_distance_rescued_both_ways():
 
 # ---------------------------------------------------------------------------
 # --pop interaction: the PAV population catalog is added as an extra
-# per-sample "caller" (dicast.py / dicast_lib/parsing.py wire
+# per-sample "caller" (dicast.py / dicast/parsing.py wire
 # [sample, 'pav', args.pop_catalog] into every sample's VCF list when --pop
 # is set), so identical pav-derived calls land in every sample's own
 # dataframe under caller == 'pav'. find_rescue_candidates has no special

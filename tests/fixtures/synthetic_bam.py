@@ -1,9 +1,9 @@
 """Reusable synthetic BAM builder for the BAM-dependent unit tests of
-:mod:`dicast_lib.collect_illumina`.
+:mod:`dicast.collect_illumina`.
 
 This helper writes a tiny, coordinate-sorted, indexed BAM into a caller-supplied
 directory (typically pytest's ``tmp_path``) so that
-:class:`dicast_lib.collect_illumina.AlignmentAnnotatorIllumina` can be exercised
+:class:`dicast.collect_illumina.AlignmentAnnotatorIllumina` can be exercised
 end-to-end without any real data.
 
 The reads are hand-built to collectively cover the branches the read-based

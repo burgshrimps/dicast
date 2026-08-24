@@ -1,10 +1,7 @@
-"""Unit tests for the top-level ``dicast.py`` orchestration script.
+"""Unit tests for the ``dicast.cli`` orchestration module.
 
-``dicast.py`` lives at the repository root and is NOT a package module, so it is
-loaded once at import time via the repo-path helper. Importing it pulls the full
-dependency closure (vcfpy, pysam, xgboost, bioframe, networkx, pyBigWig), which
-is only available in the clean CI venv. The import here is module-level so that
-``dicast.py``'s import / constant lines count as covered.
+Importing it pulls the full dependency closure (vcfpy, pysam, xgboost,
+bioframe, networkx, pyBigWig), which is only available in the project env.
 
 Everything heavy is mocked via ``monkeypatch``:
 
@@ -34,9 +31,9 @@ Dropped vs. the older lucid/dicast dev line's test_dicast.py
   default ``sv_types``, so that code path is dead from the CLI's
   perspective. See findings below.
 * No cohort VCF/CSV mode tests existed in the old module to begin with
-  (that logic lived in ``dicast_lib.utils.sample_vcf_to_dataframe``, which
+  (that logic lived in ``dicast.utils.sample_vcf_to_dataframe``, which
   this repo removed entirely -- confirmed absent from
-  ``dicast_lib/utils.py``), so nothing needed dropping there.
+  ``dicast/utils.py``), so nothing needed dropping there.
 
 New coverage added for this repo
 ---------------------------------
@@ -48,7 +45,7 @@ New coverage added for this repo
   'cohort_samples': str}`` on the raw TSV read -- without it, an all-digit
   sample name or a numeric-looking value would be silently re-typed by
   pandas' inference.
-* An end-to-end integration test running ``python3 dicast.py call`` on the
+* An end-to-end integration test running ``python3 -m dicast call`` on the
   real ``test_data/`` demo dataset (chr21, 20 real HG002 DEL/INS calls,
   caller label ``delly``).
 """
@@ -63,11 +60,7 @@ import pytest
 import vcfpy
 
 from tests.conftest import REPO_DIR
-from tests.helpers.modules import load_module_from_repo_path
-
-# Load the root CLI script once, at module import, so its import-time lines
-# (imports, chroms / sv_types constants) are counted as covered.
-dicast = load_module_from_repo_path(rel_path="dicast.py", module_name="dicast")
+from dicast import cli as dicast
 
 
 # ---------------------------------------------------------------------------
@@ -608,7 +601,7 @@ def test_call_pipeline_end_to_end_on_demo_data(tmp_path):
     vcf_in = TEST_DATA_DIR / "demo_delly.vcf.gz"
 
     cmd = [
-        sys.executable, str(REPO_DIR / "dicast.py"), "call",
+        sys.executable, "-m", "dicast", "call",
         "--sample", "demo",
         "--workdir", str(workdir),
         "--fai", str(TEST_DATA_DIR / "hg38.fa.fai"),

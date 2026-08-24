@@ -1,6 +1,6 @@
 """Reusable synthetic reference-track builders for ``ReferenceAnnotator`` tests.
 
-:class:`dicast_lib.collect_reference.ReferenceAnnotator` eagerly reads seven TSV
+:class:`dicast.collect_reference.ReferenceAnnotator` eagerly reads seven TSV
 tracks (repeats, VNTRs, STRs, CpG islands, centromeres, assembly gaps,
 alternative haplotypes) and opens one bigWig (GC content) in its constructor.
 The helpers here write tiny versions of each into a caller-supplied directory

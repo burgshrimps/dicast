@@ -27,7 +27,7 @@ dicast call \
 
 ## Why chr21, and why the header has to stay full
 
-`dicast_lib/collect_illumina.py` (`calculate_*_baseline`, ~lines 129-223)
+`dicast/collect_illumina.py` (`calculate_*_baseline`, ~lines 129-223)
 turns a chromosome name into an index (`chr1`→0 … `chr22`→21, `chrX`→22,
 `chrY`→23, `chrM`→24) and looks up `bam.lengths[chrom_idx]` — a value that
 only means "chr21's length" if the BAM header lists the standard contigs
@@ -75,7 +75,7 @@ preserves identical headers) and coordinate-sorted (`samtools sort`) into
 #### Why the variant loci are downsampled this hard
 
 `AlignmentAnnotatorIllumina.calculate_coverage_baseline` (also in
-`dicast_lib/collect_illumina.py`) takes the *median* of the average coverage
+`dicast/collect_illumina.py`) takes the *median* of the average coverage
 across 1000 random 1000bp windows. Our 149 background windows only cover
 ~0.2% of chr21's linear length, so in this dataset essentially none of those
 1000 random draws land on real data — the median, and therefore
@@ -90,7 +90,7 @@ than taking a median of 1000 mostly-empty window averages.)
 With `baseline_coverage_mean == 0`, `AlignmentAnnotatorIllumina.
 calculate_coverage_region`'s `log2((local_mean+0.1)/(baseline_mean+0.1))`
 divides by `0.1`, so *any* locus with local coverage above ~3x reads as an
-extreme outlier. `dicast_lib/collect_illumina.py`'s
+extreme outlier. `dicast/collect_illumina.py`'s
 `jump_to_next_variant_for_coverage_calculation` then treats every breakpoint
 bin whose ratio exceeds `cov_thr=5` (i.e. local coverage above ~3.1x against
 a zero baseline) as a piled-up artifact and drops the call — with the demo
@@ -128,7 +128,7 @@ candidate near chr21:44.1Mb was dropped for very low mappability/coverage
 and replaced with a neighboring call).
 
 The GIAB benchmark VCF represents these as sequence-resolved REF/ALT records
-(`dicast_lib/prepare.py` → `caller_vcf_to_dataframe` in `dicast_lib/utils.py`
+(`dicast/prepare.py` → `caller_vcf_to_dataframe` in `dicast/utils.py`
 doesn't need or use the inserted/deleted sequence — only `SVTYPE`, `END`
 (via `rec.stop`), `SVLEN` (INS only) and the sample's `GT`). So instead of
 carrying the (sometimes multi-kb) REF/ALT sequences through, the positions
@@ -164,7 +164,7 @@ five are copied unchanged:
 | --- | --- | --- |
 | `hg38_gc_content.bw` | sliced to chr21 (pyBigWig: read all chr21 intervals from the source, write a fresh bigWig with only the chr21 header entry) | full genome-wide file is ~1.7 GB |
 | `hg38_repeatmasker.tsv` | sliced to chr21 (`awk -F'\t' '$6=="chr21"'`, header kept) | full file is ~460 MB |
-| `hg38_strs_chaisson.bed` | sliced to chr21 (`awk -F'\t' '$1=="chr21"'`) | **deviation from "copy the 6 small files unchanged"**: at ~27 MB genome-wide, keeping it whole plus the ~28 MB chr21 GC bigWig alone would already exceed the 50 MB test_data budget before the BAM/VCF/other annotations are even counted. Chr21-slicing it costs nothing downstream — every annotation lookup (`ReferenceAnnotator.annotate_strs` in `dicast_lib/collect_reference.py`) only ever queries `chrom == 'chr21'` in this dataset. |
+| `hg38_strs_chaisson.bed` | sliced to chr21 (`awk -F'\t' '$1=="chr21"'`) | **deviation from "copy the 6 small files unchanged"**: at ~27 MB genome-wide, keeping it whole plus the ~28 MB chr21 GC bigWig alone would already exceed the 50 MB test_data budget before the BAM/VCF/other annotations are even counted. Chr21-slicing it costs nothing downstream — every annotation lookup (`ReferenceAnnotator.annotate_strs` in `dicast/collect_reference.py`) only ever queries `chrom == 'chr21'` in this dataset. |
 | `hg38_alt_haps.tsv` | copied unchanged | 1.5 MB whole-genome, well within budget |
 | `hg38_asmb_gaps.tsv` | copied unchanged | 43 KB |
 | `hg38_centromeres.tsv` | copied unchanged | 4 KB |

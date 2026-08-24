@@ -1,4 +1,4 @@
-"""Unit tests for ``dicast_lib/model.py`` (the ``Dicast`` class).
+"""Unit tests for ``dicast/model.py`` (the ``Dicast`` class).
 
 These cover the deterministic, non-xgboost surface of ``Dicast``:
 
@@ -19,7 +19,7 @@ These cover the deterministic, non-xgboost surface of ``Dicast``:
 The train/predict/save/load methods are xgboost-heavy and intentionally out
 of scope here.
 
-``dicast_lib.model`` imports cleanly (given xgboost + pyyaml are installed),
+``dicast.model`` imports cleanly (given xgboost + pyyaml are installed),
 so it is imported directly.
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dicast_lib.model import Dicast
+from dicast.model import Dicast
 
 
 # ---------------------------------------------------------------------------

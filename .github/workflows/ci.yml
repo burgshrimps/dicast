@@ -23,18 +23,18 @@ jobs:
         shell: bash -el {0}
         run: pip install -r tests/requirements-test.txt
 
-      - name: Import-check every dicast_lib module
+      - name: Import-check every dicast module
         shell: bash -el {0}
         run: |
           python3 -c "
-          import dicast_lib.parsing
-          import dicast_lib.prepare
-          import dicast_lib.collect_illumina
-          import dicast_lib.collect_reference
-          import dicast_lib.model
-          import dicast_lib.multi
-          import dicast_lib.utils
-          print('dicast_lib: all modules imported OK')
+          import dicast.parsing
+          import dicast.prepare
+          import dicast.collect_illumina
+          import dicast.collect_reference
+          import dicast.model
+          import dicast.multi
+          import dicast.utils
+          print('dicast: all modules imported OK')
           "
 
       - name: CLI help sanity checks

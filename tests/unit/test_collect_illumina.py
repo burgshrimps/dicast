@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`dicast_lib.collect_illumina`.
+"""Unit tests for :mod:`dicast.collect_illumina`.
 
 Two complementary strategies are used:
 
@@ -13,7 +13,7 @@ Two complementary strategies are used:
     is what exercises the large ``calculate_read_based_features`` /
     ``calculate_coverage`` code paths, which is required to clear 60% coverage.
 
-``dicast_lib`` imports cleanly, so the class is imported directly.
+``dicast`` imports cleanly, so the class is imported directly.
 
 Notes on porting from the older lucid/dicast dev line:
   - This repo's runtime env pins pysam 0.24.0, which has ``AlignedSegment.is_mapped``
@@ -36,7 +36,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dicast_lib.collect_illumina import AlignmentAnnotatorIllumina
+from dicast.collect_illumina import AlignmentAnnotatorIllumina
 from tests.fixtures import synthetic_bam
 
 

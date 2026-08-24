@@ -6,7 +6,7 @@ import re
 import time
 import logging
 
-from dicast_lib.utils import mad
+from dicast.utils import mad
 
 
 class AlignmentAnnotatorIllumina:

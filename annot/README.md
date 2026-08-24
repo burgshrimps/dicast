@@ -1,7 +1,7 @@
 # hg38 annotation directory
 
 Reference annotation files consumed by dicast's `ReferenceAnnotator`
-(`dicast_lib/collect_reference.py`) for feature engineering. All are public;
+(`dicast/collect_reference.py`) for feature engineering. All are public;
 sources are listed per file below.
 
 ## Shipped files

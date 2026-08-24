@@ -184,10 +184,10 @@ variants for DEL/INS):
 
 INV has no trained model — it's scored with a fixed rule based on clipped
 reads, discordant-pair signal, coverage, mapping quality, and split reads
-(see `Dicast.score_inversions` in `dicast_lib/model.py`).
+(see `Dicast.score_inversions` in `dicast/model.py`).
 
 Swap in your own models by pointing `--models` at a directory with the same
-`dicast_<SV_TYPE>[_pop].json` naming convention; `dicast_lib/model.py` is
+`dicast_<SV_TYPE>[_pop].json` naming convention; `dicast/model.py` is
 the training entry point.
 
 ## Reference annotations

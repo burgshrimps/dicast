@@ -43,13 +43,13 @@ def stage_timer(stage_name, rows):
             'peak_rss_gb': round(peak_rss_kb / (1024 * 1024), 3),
         })
 
-from dicast_lib.parsing import parse_arguments, validate_inputs
-from dicast_lib.utils import replace_filename
-from dicast_lib.prepare import VariantPrep
-from dicast_lib.collect_reference import ReferenceAnnotator
-from dicast_lib.collect_illumina import AlignmentAnnotatorIllumina
-from dicast_lib.model import Dicast
-from dicast_lib.multi import find_rescue_candidates
+from dicast.parsing import parse_arguments, validate_inputs
+from dicast.utils import replace_filename
+from dicast.prepare import VariantPrep
+from dicast.collect_reference import ReferenceAnnotator
+from dicast.collect_illumina import AlignmentAnnotatorIllumina
+from dicast.model import Dicast
+from dicast.multi import find_rescue_candidates
 
 # Suppresses stacked htslib warnings when a BAM/CRAM index predates the alignment file.
 pysam.set_verbosity(0)

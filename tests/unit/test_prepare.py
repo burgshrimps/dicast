@@ -1,4 +1,4 @@
-"""Unit tests for ``dicast_lib/prepare.py``.
+"""Unit tests for ``dicast/prepare.py``.
 
 Covers the ``VariantPrep`` class. The only heavy thing the constructor does is
 ``pd.read_csv(chrom_sizes, ...)`` over a FAI / chrom-sizes TSV, so each test
@@ -22,7 +22,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from dicast_lib import prepare
+from dicast import prepare
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +280,7 @@ def test_filter_variants_coerces_string_coords_to_int(tmp_path):
 # The older dev line's cohort VCF/CSV mode (and its filter_variants_cohort()
 # method, which dropped full-AC and low-qual rows) was removed entirely from
 # this repo's VariantPrep in favor of the 'multi' subcommand's cross-sample
-# rescue (dicast_lib/multi.py). dicast_lib/prepare.py here defines no such
+# rescue (dicast/multi.py). dicast/prepare.py here defines no such
 # method, so both of the older test_filter_variants_cohort_* tests are
 # dropped rather than adapted.
 

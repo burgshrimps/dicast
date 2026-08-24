@@ -4,7 +4,7 @@ import numpy as np
 import re
 import os
 
-from dicast_lib.utils import replace_filename, caller_vcf_to_dataframe
+from dicast.utils import replace_filename, caller_vcf_to_dataframe
 
 
 class VariantPrep:

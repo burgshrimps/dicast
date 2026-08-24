@@ -17,8 +17,7 @@ dependencies = []
 Repository = "https://github.com/burgshrimps/dicast"
 
 [project.scripts]
-dicast = "dicast:main"
+dicast = "dicast.cli:main"
 
 [tool.setuptools]
-py-modules = ["dicast"]
-packages = ["dicast_lib"]
+packages = ["dicast"]
