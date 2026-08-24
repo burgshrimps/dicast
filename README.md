@@ -112,6 +112,6 @@ VCFs.
 **To consider a call a true positive, we recommend the following score
 thresholds:**
 
-- **deletions: 0.45**
-- **insertions: 0.30**
-- **duplications: 0.40**
+- **DEL: 0.45**
+- **INS: 0.30**
+- **DUP: 0.40**
