@@ -217,22 +217,3 @@ Six of these are tracked in git under `annot/`. `hg38_gc_content.bw`
 limit and are fetched on demand from a GitHub Release by
 `bash download_annotations.sh`, which verifies each against
 `annot/checksums.md5`. Full source details are in `annot/README.md`.
-
-## Citation
-
-The dicast paper has been accepted in principle at *Genome Biology*
-(DOI to be assigned on publication). Until then, please cite this repository.
-
-```bibtex
-@article{dicast,
-  title   = {dicast: TBD},
-  author  = {TBD},
-  journal = {Genome Biology},
-  year    = {2026},
-  note    = {Accepted in principle. DOI TBD.}
-}
-```
-
-## License
-
-GPL-3.0. See [LICENSE](LICENSE).
