@@ -186,9 +186,7 @@ INV has no trained model — it's scored with a fixed rule based on clipped
 reads, discordant-pair signal, coverage, mapping quality, and split reads
 (see `Dicast.score_inversions` in `dicast_lib/model.py`).
 
-Each model has a sibling `*_metadata.json` (training date, feature list,
-cohorts, callers, and positive/negative call counts). Swap in your own
-models by pointing `--models` at a directory with the same
+Swap in your own models by pointing `--models` at a directory with the same
 `dicast_<SV_TYPE>[_pop].json` naming convention; `dicast_lib/model.py` is
 the training entry point.
 
