@@ -34,8 +34,7 @@ conda activate dicast
 
 *On first use dicast asks where to store the hg38 annotation files it
 downloads once (~2.1 GB; press Enter to accept the suggested location, the
-repo's `annot/` folder) and reuses them from then on. `--models` defaults to
-the `models/` directory shipped in this repo.*
+repo's `annot/` folder) and reuses them from then on.*
 
 **Single sample:**
 
