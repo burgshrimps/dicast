@@ -218,12 +218,6 @@ limit and are fetched on demand from a GitHub Release by
 `bash download_annotations.sh`, which verifies each against
 `annot/checksums.md5`. Full source details are in `annot/README.md`.
 
-## Reproducing the paper benchmark
-
-`dicast_benchmark_hg002.sh` reproduces the runtime / peak-memory benchmark
-reported in the paper on HG002 (30x WGS Illumina) — see that script for the
-input paths to configure.
-
 ## Citation
 
 The dicast paper has been accepted in principle at *Genome Biology*
