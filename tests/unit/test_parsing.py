@@ -46,12 +46,13 @@ def _touch(path):
 
 
 @pytest.fixture
-def call_required_args(tmp_path):
+def call_required_args(tmp_path, monkeypatch):
     """Minimal argv tokens satisfying every required flag of the 'call' subcommand.
 
     Uses an empty, isolated --annot-dir/--models so tests don't depend on (or
-    slow down against) the real multi-gigabyte annotation files/model files
-    shipped in the repo's own annot/ and models/ directories.
+    slow down against) the real multi-gigabyte annotation files/model files.
+    DICAST_DATA_DIR points at a pre-populated tmp store so tests that omit
+    --annot-dir resolve against it and never trigger the first-use download.
     """
     fai = _touch(tmp_path / "ref.fa.fai")
     bam = _touch(tmp_path / "sample.bam")
@@ -61,12 +62,17 @@ def call_required_args(tmp_path):
     annot_dir.mkdir()
     models_dir = tmp_path / "models_empty"
     models_dir.mkdir()
+    data_dir = tmp_path / "data_store"
+    data_dir.mkdir()
+    _populate_annot_dir(data_dir)
+    monkeypatch.setenv("DICAST_DATA_DIR", str(data_dir))
     return {
         "fai": fai,
         "bam": bam,
         "vcf": vcf,
         "annot_dir": str(annot_dir),
         "models_dir": str(models_dir),
+        "data_dir": str(data_dir),
         "workdir": str(tmp_path / "work"),
     }
 
@@ -142,15 +148,15 @@ def test_call_subcommand_defaults(call_required_args):
     assert args.technology == "ill"
     assert args.threads == 1
     assert args.pop is False
-    # --annot-dir was not passed, so it falls back to the package default, and
-    # --pop-catalog is resolved against it just like the other annotation flags.
-    assert args.pop_catalog == os.path.join(parsing.REPO_ROOT, 'annot', parsing.POP_CATALOG_NAME)
+    # --annot-dir was not passed, so it falls back to the managed annotation
+    # store (isolated to a populated tmp dir via DICAST_DATA_DIR by the
+    # fixture), and --pop-catalog is resolved against it like the other flags.
+    assert args.annot_dir == call_required_args["data_dir"]
+    assert args.pop_catalog == os.path.join(args.annot_dir, parsing.POP_CATALOG_NAME)
     assert args.benchmark is None
     assert args.sv_types is None
     # --models defaults to a package-relative path, not None/required.
     assert args.models == os.path.join(parsing.REPO_ROOT, 'models')
-    # --annot-dir defaults to a package-relative path.
-    assert args.annot_dir == os.path.join(parsing.REPO_ROOT, 'annot')
     # This CLI has no exome support at all.
     assert not hasattr(args, 'exome')
     assert not hasattr(args, 'exome_regions')
@@ -457,9 +463,8 @@ def test_validate_call_inputs_missing_model_file_exits(call_required_args, tmp_p
 
 
 @pytest.mark.unit
-def test_validate_call_inputs_large_annot_files_hint_download_script(call_required_args, tmp_path, capsys):
-    # 'gc' and 'repeats' are flagged as large annotation files not shipped in
-    # git; missing them should hint at download_annotations.sh.
+def test_validate_call_inputs_missing_annot_files_hint_fetch_command(call_required_args, tmp_path, capsys):
+    # Missing annotation files hint at the dicast-fetch-annotations command.
     args = _build_valid_call_args(call_required_args, tmp_path)
     os.remove(args.gc)
     os.remove(args.repeats)
@@ -468,13 +473,12 @@ def test_validate_call_inputs_large_annot_files_hint_download_script(call_requir
     err = capsys.readouterr().err
     assert '--gc file not found' in err
     assert '--repeats file not found' in err
-    assert err.count('download_annotations.sh') == 2
-    # A small annotation file's error should NOT carry the download hint.
+    assert err.count('dicast-fetch-annotations') == 2
     assert '--cgis file not found' not in err
 
 
 @pytest.mark.unit
-def test_validate_call_inputs_pop_catalog_missing_hints_download_script(call_required_args, tmp_path, capsys):
+def test_validate_call_inputs_pop_catalog_missing_mentions_release(call_required_args, tmp_path, capsys):
     args = _build_valid_call_args(call_required_args, tmp_path)
     args.pop = True
     args.pop_catalog = str(tmp_path / "missing_pav_catalog.vcf.gz")
@@ -482,7 +486,7 @@ def test_validate_call_inputs_pop_catalog_missing_hints_download_script(call_req
         parsing.validate_inputs(args)
     err = capsys.readouterr().err
     assert '--pop-catalog file not found' in err
-    assert 'download_annotations.sh' in err
+    assert 'release' in err
 
 
 # ---------------------------------------------------------------------------

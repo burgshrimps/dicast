@@ -31,6 +31,8 @@ jobs:
         shell: bash -el {0}
         run: |
           python3 -c "
+          import dicast.cli
+          import dicast.annotations
           import dicast.parsing
           import dicast.prepare
           import dicast.collect_illumina

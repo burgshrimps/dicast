@@ -5,8 +5,7 @@ __pycache__/
 .coverage.*
 demo_out/
 
-# Annotation files over GitHub's 100MB limit (see annot/README.md for sources)
-annot/hg38_gc_content.bw
-annot/hg38_repeatmasker.tsv
+# The annotation store (release assets, downloaded on first use — see README)
+annot/
 dicast.egg-info/
 build/

@@ -18,6 +18,7 @@ Repository = "https://github.com/burgshrimps/dicast"
 
 [project.scripts]
 dicast = "dicast.cli:main"
+dicast-fetch-annotations = "dicast.annotations:fetch_main"
 
 [tool.setuptools]
 packages = ["dicast"]

@@ -2,6 +2,8 @@ import argparse
 import os
 import sys
 
+from dicast import annotations
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Canonical filenames of the hg38 annotation files shipped under --annot-dir.
@@ -42,9 +44,20 @@ def resolve_annotation_paths(args: argparse.Namespace) -> argparse.Namespace:
     if args.command not in ('call', 'multi'):
         return args
 
+    defaulted_flags = []
+    if args.annot_dir is None:
+        args.annot_dir = str(annotations.annot_dir(ask=True))
+        defaulted_flags = [flag for flag in ANNOT_CANONICAL_NAMES if getattr(args, flag) is None]
+
     for flag, filename in ANNOT_CANONICAL_NAMES.items():
         if getattr(args, flag) is None:
             setattr(args, flag, os.path.join(args.annot_dir, filename))
+
+    # Files the store manages are downloaded on first use (release assets, not
+    # shipped in git); explicitly passed paths are the user's responsibility.
+    if defaulted_flags:
+        annotations.ensure_annotations(
+            [ANNOT_CANONICAL_NAMES[flag] for flag in defaulted_flags], args.annot_dir)
 
     if args.pop_catalog is None:
         args.pop_catalog = os.path.join(args.annot_dir, POP_CATALOG_NAME)
@@ -62,15 +75,12 @@ def resolve_annotation_paths(args: argparse.Namespace) -> argparse.Namespace:
 def _check_annotation_files(arguments: argparse.Namespace, problems: list):
     """ Appends a problem for every annotation flag that points at a missing file. """
 
-    large_annot_flags = {'gc', 'repeats'}
     for flag, filename in ANNOT_CANONICAL_NAMES.items():
         path = getattr(arguments, flag)
         if path is None or os.path.isfile(path):
             continue
-        if flag in large_annot_flags:
-            problems.append(f'--{flag} file not found: {path} (large annotation files are not shipped in git; run: bash download_annotations.sh)')
-        else:
-            problems.append(f'--{flag} file not found: {path}')
+        problems.append(f'--{flag} file not found: {path} '
+                        '(run: dicast-fetch-annotations, or point --annot-dir at your copies)')
 
 
 def _check_model_files(arguments: argparse.Namespace, problems: list):
@@ -139,8 +149,8 @@ def _validate_call_inputs(arguments: argparse.Namespace):
 
     if arguments.pop and not os.path.isfile(arguments.pop_catalog):
         problems.append(f'--pop-catalog file not found: {arguments.pop_catalog} '
-                        '(the PAV population catalog is distributed with the annotation files; '
-                        'run: bash download_annotations.sh, or point --pop-catalog at your copy)')
+                        '(the PAV population catalog will be published with the release assets; '
+                        'until then point --pop-catalog at your copy)')
 
     if arguments.bam and os.path.isfile(arguments.bam):
         _check_bam_index(arguments.bam, problems)
@@ -208,8 +218,8 @@ def _validate_multi_inputs(arguments: argparse.Namespace):
 
     if arguments.pop and not os.path.isfile(arguments.pop_catalog):
         problems.append(f'--pop-catalog file not found: {arguments.pop_catalog} '
-                        '(the PAV population catalog is distributed with the annotation files; '
-                        'run: bash download_annotations.sh, or point --pop-catalog at your copy)')
+                        '(the PAV population catalog will be published with the release assets; '
+                        'until then point --pop-catalog at your copy)')
 
     _check_annotation_files(arguments, problems)
     _check_model_files(arguments, problems)
@@ -235,7 +245,7 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_call.add_argument('--technology', help='Sequencing technology name', default='ill')
     parser_call.add_argument('--workdir', help='Working and output directory', required=True)
     parser_call.add_argument('--fai', help='FAI file of the reference genome', required=True)
-    parser_call.add_argument('--annot-dir', help='Directory with default hg38 annotation files', default=os.path.join(REPO_ROOT, 'annot'))
+    parser_call.add_argument('--annot-dir', help='Directory with the hg38 annotation files (default: the dicast data directory, downloaded on first use)', default=None)
     parser_call.add_argument('--repeats', help='TSV file with repeats annotated by repeatmasker', default=None)
     parser_call.add_argument('--cgis', help='TSV file with CpG island annotations', default=None)
     parser_call.add_argument('--centromeres', help='TSV file with centromere annotations', default=None)
@@ -262,7 +272,7 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_multi.add_argument('--technology', help='Sequencing technology name', default='ill')
     parser_multi.add_argument('--workdir', help='Working and output directory', required=True)
     parser_multi.add_argument('--fai', help='FAI file of the reference genome', required=True)
-    parser_multi.add_argument('--annot-dir', help='Directory with default hg38 annotation files', default=os.path.join(REPO_ROOT, 'annot'))
+    parser_multi.add_argument('--annot-dir', help='Directory with the hg38 annotation files (default: the dicast data directory, downloaded on first use)', default=None)
     parser_multi.add_argument('--repeats', help='TSV file with repeats annotated by repeatmasker', default=None)
     parser_multi.add_argument('--cgis', help='TSV file with CpG island annotations', default=None)
     parser_multi.add_argument('--centromeres', help='TSV file with centromere annotations', default=None)

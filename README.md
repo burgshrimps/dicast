@@ -28,18 +28,12 @@ conda env create -f environment.yml
 conda activate dicast
 ```
 
-Then fetch the two hg38 annotation files too large for git (~2.1 GB
-combined: GC content and RepeatMasker):
-
-```bash
-bash download_annotations.sh
-```
-
 ## Usage
 
-*`--annot-dir` and `--models` default to the `annot/` and `models/`
-directories shipped in this repo, so neither flag is needed for hg38 data.
-Individual annotation flags (`--repeats`, `--gc`, ...) override single files.*
+*On first use dicast asks where to store the hg38 annotation files it
+downloads once (~2.1 GB; press Enter to accept the suggested location, the
+repo's `annot/` folder) and reuses them from then on. `--models` defaults to
+the `models/` directory shipped in this repo.*
 
 **Demo (zero downloads):** a self-contained chr21 demo with real HG002 reads
 and calls runs the whole pipeline in seconds:
@@ -192,8 +186,7 @@ the training entry point.
 
 ## Reference annotations
 
-`annot/` ships the eight hg38 annotation files dicast's feature engineering
-depends on:
+dicast's feature engineering depends on eight hg38 annotation files:
 
 | file | source |
 |---|---|
@@ -206,8 +199,10 @@ depends on:
 | `hg38_alt_haps.tsv` | UCSC Genome Browser alternative-haplotype track |
 | `hg38_gc_content.bw` | GC-content BigWig |
 
-Six of these are tracked in git under `annot/`. `hg38_gc_content.bw`
-(~1.6 GB) and `hg38_repeatmasker.tsv` (~460 MB) exceed GitHub's 100 MB file
-limit and are fetched on demand from a GitHub Release by
-`bash download_annotations.sh`, which verifies each against
-`annot/checksums.md5`. Full source details are in `annot/README.md`.
+None of these are tracked in git — they are release assets, and dicast
+downloads the ones it needs automatically on first use (~2.1 GB total,
+checksum-verified, one time), asking once where to store them. Set the
+`DICAST_DATA_DIR` environment variable to fix the location, run
+`dicast-fetch-annotations` to prefetch everything (e.g. on a cluster ahead of
+offline jobs), or point `--annot-dir` (or the individual flags) at your own
+copies.
