@@ -17,6 +17,9 @@ and 1. We show
 that this approach outperforms individual SV callers as well as commonly
 used consensus approaches.
 
+To visually inspect the read-level evidence behind individual SV calls, check
+out dicast's companion tool [cuban](https://github.com/burgshrimps/cuban).
+
 ## Installation
 
 With conda (or mamba; swap the command accordingly):
