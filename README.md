@@ -57,9 +57,7 @@ dicast call \
 dicast scores. We recommend using the unfiltered calls of `manta`, `delly`,
 `lumpy`, `gridss`, and `cnvnator`.
 
-**Multiple samples (e.g. a trio) with cross-sample rescue:** every sample is
-additionally scored on calls that only the *other* samples' callers found
-(see [Rescued calls](#rescued-calls)); at least two samples are required:
+**Multiple samples:**
 
 ```bash
 dicast multi \
