@@ -78,20 +78,6 @@ run. For example, if based on the input VCFs a variant supposedly occurs only
 in the child and not the parents, dicast checks the same region in the
 parents' sequencing data for signal supporting an SV call.
 
-**Population mode** (`call` and `multi`): `--pop` adds the PAV
-structural-variant population catalog as an extra "caller" (labeled `pav`)
-and switches DEL/INS scoring to the population-aware models, which favour
-recall on common variants. DUP always falls back to the normal model:
-
-```bash
-dicast call ... --pop
-```
-
-`--pop-catalog` overrides the catalog VCF path (default:
-`pav_catalog_hg38.vcf.gz` under `--annot-dir`). The catalog file itself will
-be published alongside the annotation release; until then, `--pop` requires
-you to supply your own via `--pop-catalog`.
-
 ## Output
 
 A `call` run fills `--workdir` with a fixed tree of intermediate and final
