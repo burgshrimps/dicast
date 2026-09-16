@@ -19,12 +19,24 @@ module was ported from:
   (not exercised by ``parse_arguments`` itself) does on-disk validation
   (missing files, missing BAM indexes, missing model files, malformed
   tokens, ...).
+- There is a third subcommand, ``check`` (report what dicast understands
+  from a set of input VCFs, without running the pipeline): ``--vcfs`` and
+  ``--fai`` are required, ``--sample``/``--chrom``/``--out`` are optional.
+  It has no workdir/models/annotation flags at all, so
+  ``resolve_annotation_paths`` is a no-op for it (it returns early for any
+  command other than 'call'/'multi') and its own ``_validate_check_inputs``
+  only checks that ``--fai`` and every ``--vcfs`` file exist.
+- ``parse_arguments`` is now ``build_parser()`` (returns the configured
+  ``argparse.ArgumentParser``, all three subcommands) plus a thin
+  ``parse_arguments()`` that parses argv against it and resolves annotation
+  paths.
 
 Expected values are derived from the argv list we construct, or from real
 files created in ``tmp_path``, not from the function's own output.
 """
 from __future__ import annotations
 
+import argparse
 import os
 
 import pytest
@@ -643,3 +655,256 @@ def test_validate_multi_inputs_missing_bam_index_exits(call_required_args, tmp_p
         parsing.validate_inputs(args)
     err = capsys.readouterr().err
     assert 'BAM index not found' in err
+
+
+# ---------------------------------------------------------------------------
+# check subcommand — argument parsing
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def check_required_args(tmp_path):
+    """Minimal argv tokens satisfying every required flag of the 'check'
+    subcommand: just --vcfs and --fai (no workdir/models/annotations at
+    all -- 'check' never touches any of those)."""
+    fai = _touch(tmp_path / "ref.fa.fai")
+    vcf = _touch(tmp_path / "manta.vcf")
+    return {"fai": fai, "vcf": vcf}
+
+
+@pytest.mark.unit
+def test_check_subcommand_parses_fields(check_required_args):
+    args = parsing.parse_arguments(
+        arguments=[
+            "check",
+            "--vcfs", f"manta={check_required_args['vcf']}",
+            "--fai", check_required_args["fai"],
+            "--sample", "mysample",
+            "--chrom", "chr1", "chr2",
+            "--out", "/tmp/report.tsv",
+        ]
+    )
+    assert args.command == "check"
+    assert args.vcfs == [["manta", check_required_args["vcf"]]]
+    assert args.fai == check_required_args["fai"]
+    assert args.sample == "mysample"
+    assert args.chrom == ["chr1", "chr2"]
+    assert args.out == "/tmp/report.tsv"
+
+
+@pytest.mark.unit
+def test_check_subcommand_defaults(check_required_args):
+    # Only --vcfs/--fai are required; --sample/--out default to None and
+    # --chrom defaults to 'all' (same convention as 'call'/'multi').
+    args = parsing.parse_arguments(
+        arguments=[
+            "check",
+            "--vcfs", f"manta={check_required_args['vcf']}",
+            "--fai", check_required_args["fai"],
+        ]
+    )
+    assert args.sample is None
+    assert args.chrom == "all"
+    assert args.out is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("missing", ["--vcfs", "--fai"])
+def test_check_missing_required_flag_exits(check_required_args, missing):
+    full_args = [
+        "check",
+        "--vcfs", f"manta={check_required_args['vcf']}",
+        "--fai", check_required_args["fai"],
+    ]
+    idx = full_args.index(missing)
+    del full_args[idx:idx + 2]
+    with pytest.raises(SystemExit):
+        parsing.parse_arguments(arguments=full_args)
+
+
+@pytest.mark.unit
+def test_check_subcommand_has_no_annotation_or_model_flags(check_required_args):
+    # 'check' reports on input VCFs only -- it has none of the annotation-
+    # file, --models, --workdir, --bam or --pop flags 'call'/'multi' have.
+    args = parsing.parse_arguments(
+        arguments=[
+            "check",
+            "--vcfs", f"manta={check_required_args['vcf']}",
+            "--fai", check_required_args["fai"],
+        ]
+    )
+    for flag in ('annot_dir', 'models', 'workdir', 'bam', 'pop', 'pop_catalog',
+                 'repeats', 'cgis', 'centromeres', 'gaps', 'althaps', 'vntrs',
+                 'strs', 'gc'):
+        assert not hasattr(args, flag)
+
+
+@pytest.mark.unit
+def test_check_never_touches_annotation_store(check_required_args, monkeypatch):
+    # resolve_annotation_paths() early-returns for any command other than
+    # 'call'/'multi', so parsing 'check' args must never call into the
+    # managed-annotation-store machinery (which would otherwise prompt a
+    # multi-GB first-use download).
+    def _boom(*args, **kwargs):
+        raise AssertionError('annotation store must not be touched for check')
+
+    monkeypatch.setattr(parsing.annotations, 'annot_dir', _boom)
+    monkeypatch.setattr(parsing.annotations, 'ensure_annotations', _boom)
+
+    args = parsing.parse_arguments(
+        arguments=[
+            "check",
+            "--vcfs", f"manta={check_required_args['vcf']}",
+            "--fai", check_required_args["fai"],
+        ]
+    )
+    assert args.command == "check"
+
+
+# ---------------------------------------------------------------------------
+# check subcommand — validate_inputs
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_validate_check_inputs_all_present_succeeds(check_required_args):
+    args = parsing.parse_arguments(
+        arguments=[
+            "check",
+            "--vcfs", f"manta={check_required_args['vcf']}",
+            "--fai", check_required_args["fai"],
+        ]
+    )
+    # Should not raise/exit, and (unlike 'call'/'multi') must not create a
+    # workdir -- 'check' has none.
+    parsing.validate_inputs(args)
+
+
+@pytest.mark.unit
+def test_validate_check_inputs_missing_fai_exits(check_required_args, capsys):
+    args = parsing.parse_arguments(
+        arguments=[
+            "check",
+            "--vcfs", f"manta={check_required_args['vcf']}",
+            "--fai", check_required_args["fai"],
+        ]
+    )
+    os.remove(args.fai)
+    with pytest.raises(SystemExit):
+        parsing.validate_inputs(args)
+    err = capsys.readouterr().err
+    assert '--fai file' in err
+    assert args.fai in err
+
+
+@pytest.mark.unit
+def test_validate_check_inputs_missing_vcf_exits(check_required_args, capsys):
+    args = parsing.parse_arguments(
+        arguments=[
+            "check",
+            "--vcfs", f"manta={check_required_args['vcf']}",
+            "--fai", check_required_args["fai"],
+        ]
+    )
+    os.remove(check_required_args["vcf"])
+    with pytest.raises(SystemExit):
+        parsing.validate_inputs(args)
+    err = capsys.readouterr().err
+    assert 'VCF file for caller manta not found' in err
+
+
+@pytest.mark.unit
+def test_validate_check_inputs_no_vcfs_reports_required(check_required_args, capsys):
+    args = parsing.parse_arguments(
+        arguments=[
+            "check",
+            "--vcfs", f"manta={check_required_args['vcf']}",
+            "--fai", check_required_args["fai"],
+        ]
+    )
+    args.vcfs = []
+    with pytest.raises(SystemExit):
+        parsing.validate_inputs(args)
+    err = capsys.readouterr().err
+    assert '--vcfs is required' in err
+
+
+@pytest.mark.unit
+def test_validate_check_inputs_malformed_vcfs_token_exits(check_required_args, capsys):
+    args = parsing.parse_arguments(
+        arguments=[
+            "check",
+            "--vcfs", f"manta={check_required_args['vcf']}",
+            "--fai", check_required_args["fai"],
+        ]
+    )
+    args.vcfs = [["mantavcf"]]
+    with pytest.raises(SystemExit):
+        parsing.validate_inputs(args)
+    err = capsys.readouterr().err
+    assert 'Malformed --vcfs entry' in err
+    assert 'mantavcf' in err
+
+
+@pytest.mark.unit
+def test_validate_check_inputs_rejects_duplicate_caller_labels(check_required_args, capsys):
+    # Internal record ids are caller:ordinal, so two files under one label
+    # would collide; every subcommand rejects that up front.
+    args = parsing.parse_arguments(
+        arguments=[
+            "check",
+            "--vcfs", f"delly={check_required_args['vcf']}", f"delly={check_required_args['vcf']}",
+            "--fai", check_required_args["fai"],
+        ]
+    )
+    with pytest.raises(SystemExit):
+        parsing.validate_inputs(args)
+    assert "Caller label used more than once: delly" in capsys.readouterr().err
+
+
+@pytest.mark.unit
+def test_validate_call_inputs_rejects_duplicate_caller_labels(call_required_args, capsys):
+    args = parsing.parse_arguments(
+        arguments=[
+            "call", "--sample", "s",
+            "--workdir", call_required_args["workdir"],
+            "--fai", call_required_args["fai"],
+            "--bam", call_required_args["bam"],
+            "--annot-dir", call_required_args["annot_dir"],
+            "--models", call_required_args["models_dir"],
+            "--vcfs", f"delly={call_required_args['vcf']}", f"delly={call_required_args['vcf']}",
+        ]
+    )
+    with pytest.raises(SystemExit):
+        parsing.validate_inputs(args)
+    assert "Caller label used more than once: delly" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# build_parser — three subcommands
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_build_parser_exposes_all_three_subcommands():
+    parser = parsing.build_parser()
+    subparsers_action = next(
+        action for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    assert set(subparsers_action.choices) == {'call', 'multi', 'check'}
+
+
+@pytest.mark.unit
+def test_parse_arguments_uses_build_parser(call_required_args):
+    # parse_arguments() is a thin wrapper: build_parser() + parse_args() +
+    # resolve_annotation_paths(). A namespace parsed via parse_arguments()
+    # must be indistinguishable from one parsed by hand against build_parser().
+    argv = [
+        "call",
+        "--sample", "mysample",
+        "--workdir", call_required_args["workdir"],
+        "--fai", call_required_args["fai"],
+        "--bam", call_required_args["bam"],
+        "--vcfs", f"manta={call_required_args['vcf']}",
+    ]
+    via_parse_arguments = parsing.parse_arguments(arguments=argv)
+    via_build_parser = parsing.resolve_annotation_paths(parsing.build_parser().parse_args(argv))
+    assert vars(via_parse_arguments) == vars(via_build_parser)

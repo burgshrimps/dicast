@@ -2,9 +2,9 @@
 
 Covers the ``VariantPrep`` class. The only heavy thing the constructor does is
 ``pd.read_csv(chrom_sizes, ...)`` over a FAI / chrom-sizes TSV, so each test
-writes a tiny FAI into ``tmp_path`` and passes its path. The variant dataframe
-that drives the rest of the methods is assembled in-test and assigned directly
-to ``instance.df_variants``.
+writes a tiny FAI into ``tmp_path`` and passes its path. For methods that do
+not touch real VCFs, the variant dataframe that drives them is assembled
+in-test and assigned directly to ``instance.df_variants``.
 
 This repo's ``VariantPrep`` constructor no longer takes ``sample``, ``vcfs``,
 or ``mode`` -- those were dropped along with cohort VCF/CSV mode (replaced by
@@ -12,7 +12,10 @@ the ``multi`` subcommand). ``sample``/``vcfs`` are now set via the separate
 ``read_vcf(vcfs, sample)`` method, and there is no ``mode`` concept or
 ``filter_variants_cohort`` method at all any more.
 
-``read_variants`` (opens real VCFs via pysam) is intentionally out of scope.
+``read_variants`` now calls ``dicast.vcf_input.read_caller_vcf`` (the single
+place dicast reads a VCF for variant calls) once per ``(caller, path)`` pair
+in ``self.vcfs``, so its tests here write real, minimal VCFs via
+``tests/fixtures/synthetic_vcf.write_vcf`` rather than staying out of scope.
 
 Expected values are derived from the inputs we construct, not from the methods'
 own output.
@@ -23,6 +26,8 @@ import pandas as pd
 import pytest
 
 from dicast import prepare
+from dicast.vcf_input import VcfInputError
+from tests.fixtures import synthetic_vcf as sv
 
 
 # ---------------------------------------------------------------------------
@@ -36,13 +41,11 @@ def _write_fai(tmp_path, contigs):
     ``['size', 'offset', 'linebases', 'linewidth'] -> the first TSV column is
     the contig name (becomes the index) and the second is ``size``.
 
-    ``contigs`` is a list of ``(name, size)`` pairs.
+    ``contigs`` is a list of ``(name, size)`` pairs. Delegates to the shared
+    ``synthetic_vcf.write_fai`` fixture writer so the FAI text format has one
+    definition across the test suite.
     """
-    fai = tmp_path / "ref.fa.fai"
-    # Standard .fai layout: name<TAB>length<TAB>offset<TAB>linebases<TAB>linewidth
-    lines = [f"{name}\t{size}\t0\t60\t61\n" for name, size in contigs]
-    fai.write_text("".join(lines))
-    return str(fai)
+    return sv.write_fai(tmp_path, "ref.fa.fai", contigs)
 
 
 def _make_prep(tmp_path, contigs=None, sv_types=None, workdir=None,
@@ -129,9 +132,69 @@ def test_read_vcf_stores_sample_and_vcfs(tmp_path):
 @pytest.mark.unit
 def test_read_vcf_does_not_parse_anything(tmp_path):
     # read_vcf() only stores the raw inputs; parsing happens in the separate
-    # (pysam-backed, out-of-scope-here) read_variants() method.
+    # read_variants() method.
     prep = _make_prep(tmp_path)
     assert not hasattr(prep, "df_variants")
+
+
+# ---------------------------------------------------------------------------
+# read_variants
+#
+# Delegates per-file parsing to dicast.vcf_input.read_caller_vcf, so these
+# tests write real (minimal) VCFs via synthetic_vcf.write_vcf rather than
+# assembling a dataframe by hand. Every record here uses a symbolic DEL ALT
+# with END+SVLEN on a single contig ('chr1'), the simplest record shape that
+# survives read_caller_vcf's SV contract -- the branch coverage for *how*
+# records are normalized (contig mapping, sample policy, SV type precedence,
+# ...) lives in tests/unit/test_vcf_input.py, not here.
+# ---------------------------------------------------------------------------
+
+def _del_record(pos: int, rec_id: str) -> dict:
+    """One minimal, always-kept DEL record dict for synthetic_vcf.write_vcf."""
+    return {
+        'chrom': 'chr1', 'pos': pos, 'id': rec_id, 'alt': '<DEL>',
+        'info': f'SVTYPE=DEL;END={pos + 500};SVLEN=-500',
+    }
+
+
+@pytest.mark.unit
+def test_read_variants_concatenates_files_and_keeps_reports(tmp_path):
+    manta_vcf = sv.write_vcf(
+        tmp_path, 'manta.vcf', [_del_record(1000, 'DELA'), _del_record(2000, 'DELB')])
+    delly_vcf = sv.write_vcf(tmp_path, 'delly.vcf', [_del_record(5000, 'DELC')])
+
+    prep = _make_prep(
+        tmp_path, contigs=[('chr1', 100000)],
+        vcfs=[['manta', manta_vcf], ['delly', delly_vcf]])
+    prep.read_variants()
+
+    # One FileReport per input file, in input order, each reporting the
+    # right caller and usable count.
+    assert [r.caller for r in prep.reports] == ['manta', 'delly']
+    assert [r.usable for r in prep.reports] == [2, 1]
+    assert all(r.status == 'OK' for r in prep.reports)
+
+    # Both files' rows are concatenated, and internal ids (f"{caller}:{ordinal}")
+    # are unique across files.
+    assert len(prep.df_variants) == 3
+    assert prep.df_variants['id'].is_unique
+    assert set(prep.df_variants['id']) == {'manta:0', 'manta:1', 'delly:0'}
+    assert set(prep.df_variants['sv_type']) == {'DEL'}
+
+
+@pytest.mark.unit
+def test_read_variants_raises_when_a_file_has_zero_usable_records(tmp_path):
+    # A header-only VCF (no records at all) reads fine but has nothing
+    # usable -- read_variants must not silently carry it forward.
+    empty_vcf = sv.write_vcf(tmp_path, 'empty.vcf', [])
+
+    prep = _make_prep(tmp_path, contigs=[('chr1', 100000)], vcfs=[['manta', empty_vcf]])
+    with pytest.raises(VcfInputError) as excinfo:
+        prep.read_variants()
+
+    # The error names the offending file and points at 'dicast check'.
+    assert empty_vcf in str(excinfo.value)
+    assert 'dicast check' in str(excinfo.value)
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +335,37 @@ def test_filter_variants_coerces_string_coords_to_int(tmp_path):
     assert prep.df_variants["start"].dtype == int
     assert prep.df_variants.loc[0, "start"] == 1000
     assert prep.df_variants.loc[0, "end"] == 2000
+
+
+@pytest.mark.unit
+def test_filter_variants_returns_early_on_empty_frame(tmp_path):
+    # An empty df_variants (e.g. every input file was itself empty) has no
+    # 'chrom'/'sv_type' columns to filter on -- filter_variants must return
+    # immediately rather than running .apply()/column indexing on it.
+    prep = _make_prep(tmp_path, contigs=[("chr1", 100000)], sv_types=["DEL"])
+    prep.df_variants = pd.DataFrame()
+    prep.filter_variants()
+    assert prep.df_variants.empty
+
+
+@pytest.mark.unit
+def test_filter_variants_raises_when_nothing_left_after_sv_types(tmp_path):
+    prep = _make_prep(
+        tmp_path,
+        contigs=[("chr1", 100000)],
+        sv_types=["DUP"],  # the only row below is a DEL, so nothing matches
+    )
+    prep.df_variants = pd.DataFrame(
+        {
+            "sv_type": ["DEL"],
+            "chrom": ["chr1"],
+            "chrom_2": [None],
+            "start": [1000],
+            "end": [2000],
+        }
+    )
+    with pytest.raises(VcfInputError, match="DUP"):
+        prep.filter_variants()
 
 
 # ---------------------------------------------------------------------------

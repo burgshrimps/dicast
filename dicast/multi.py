@@ -103,6 +103,10 @@ def find_rescue_candidates(own_variant_dfs: dict) -> dict:
             row['sample'] = sample
             row['id'] = f"rescue_{representative['sample']}_{representative['caller']}_{representative['id']}"
             row['caller'] = f"rescue:{representative['sample']}:{representative['caller']}"
+            # A rescue row is a transplanted copy of another sample's call, not
+            # a record read from this sample's own VCF, so it has no original
+            # caller ID of its own.
+            row['vcf_id'] = None
             rescue_rows[sample].append(row)
 
     return {

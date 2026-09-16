@@ -1,7 +1,6 @@
 import argparse
 import logging
 import sys
-from collections import OrderedDict
 from joblib import Parallel, delayed
 import pandas as pd
 from glob import glob
@@ -12,7 +11,6 @@ import resource
 from contextlib import contextmanager
 from time import perf_counter
 from datetime import datetime
-import vcfpy
 import pysam
 import pickle
 
@@ -51,18 +49,22 @@ from dicast.collect_illumina import AlignmentAnnotatorIllumina
 from dicast.model import Dicast
 from dicast.multi import find_rescue_candidates
 from dicast.merge import build_merged_vcf
+from dicast.vcf_input import (
+    DEFAULT_CHROMS,
+    SUPPORTED_SV_TYPES,
+    TSV_DTYPES,
+    VcfInputError,
+    canonical_chroms,
+    check_files,
+    fai_warnings,
+    read_fai_contigs,
+    report_table,
+    reports_to_dataframe,
+    write_dq_tagged_vcf,
+)
 
 # Suppresses stacked htslib warnings when a BAM/CRAM index predates the alignment file.
 pysam.set_verbosity(0)
-
-
-# List of chromosomes to process
-chroms = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 
-          'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 
-          'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
-
-# List of SV types currently supported by dicast
-sv_types = ['DEL', 'DUP', 'INS']
 
 
 def sample_root(command: str, workdir: str, sample: str) -> str:
@@ -139,8 +141,7 @@ def combine_feature_files(sample: str, ref: str, root: str) -> pd.DataFrame:
 
     paths = build_paths(root, sample, ref)
 
-    df_raw = pd.read_csv(paths['raw'], sep='\t', low_memory=False,
-                         dtype={'sample': str, 'cohort_samples': str})
+    df_raw = pd.read_csv(paths['raw'], sep='\t', low_memory=False, dtype=TSV_DTYPES)
     df_ref = pd.read_csv(paths['ref'], sep='\t', low_memory=False)
 
     filenames_aln_ill = glob(os.path.join(paths['aln_dir'], f"{paths['prefix']}.SVs.aln.ill.*.*.tsv"))
@@ -154,7 +155,8 @@ def combine_feature_files(sample: str, ref: str, root: str) -> pd.DataFrame:
 
 
 def add_info_tag_to_vcf(arguments: argparse.Namespace):
-    """ Adds dicast quality to input VCFs.
+    """ Adds dicast quality scores to each input VCF's records, one
+    DQ-tagged output VCF per caller (see vcf_input.write_dq_tagged_vcf).
 
     Args:
         arguments (argparse.Namespace): Parsed command line arguments
@@ -163,32 +165,17 @@ def add_info_tag_to_vcf(arguments: argparse.Namespace):
     root = sample_root(arguments.command, arguments.workdir, arguments.sample)
     paths = build_paths(root, arguments.sample, arguments.ref)
 
-    dicast_df = pd.read_csv(paths['dicast'], sep='\t',
-                            dtype={'sample': str, 'cohort_samples': str})
+    dicast_df = pd.read_csv(paths['dicast'], sep='\t', dtype=TSV_DTYPES)
 
     for caller, vcf_filename in arguments.vcfs:
-        vcf_in = vcfpy.Reader.from_path(vcf_filename)
-        vcf_in.header.add_info_line(OrderedDict([('ID', 'DQ'),
-                                                 ('Number', '1'),
-                                                 ('Type', 'String'),
-                                                 ('Description', 'Dicast Quality Score')]))
+        dicast_df_caller = dicast_df[dicast_df['caller'] == caller]
+        scores = dict(zip(dicast_df_caller['id'], dicast_df_caller['dicast_qual']))
+
         # Named after the caller label, not the input filename -- two callers
         # whose input files happen to share a basename would otherwise
         # silently overwrite each other's output.
         vcf_filename_out = os.path.join(paths['output_dir'], f'{arguments.sample}_{caller}.dicast.vcf')
-        vcf_out = vcfpy.Writer.from_path(vcf_filename_out, vcf_in.header)
-
-        dicast_df_caller = dicast_df[dicast_df['caller']== caller].copy().reset_index(drop=True)
-        dicast_df_caller = dicast_df_caller[['id', 'dicast_qual']].set_index('id').T.to_dict('list')
-
-        for rec in vcf_in:
-            if rec.ID[0] in dicast_df_caller.keys():
-                qual_dicast = dicast_df_caller[rec.ID[0]][0]
-            else:
-                qual_dicast = -1
-
-            rec.INFO['DQ'] = str(qual_dicast)
-            vcf_out.write_record(rec)
+        write_dq_tagged_vcf(vcf_filename, vcf_filename_out, caller, scores)
 
         logging.info(
             f'Added DQ tag to {caller} VCF file')
@@ -295,6 +282,40 @@ def score_variants(sv_types: list, arguments: argparse.Namespace, sample: str):
     dicast_df.to_csv(paths['dicast'], sep='\t', index=False, na_rep='NA')
 
 
+def run_check(arguments: argparse.Namespace):
+    """ Runs `dicast check`: reports, per input VCF, how many records were
+    read/kept/dropped and why, without touching workdir, models or
+    annotations. Prints the report table to stdout and, if `--out` was
+    given, also writes it as a TSV.
+
+    Args:
+        arguments (argparse.Namespace): Parsed command line arguments
+
+    Exits with status 1 if any input file has zero usable records (mirrors
+    the failure mode `dicast call`/`multi` would hit on the same input).
+    """
+
+    fai_contigs = read_fai_contigs(arguments.fai)
+    requested_chroms = DEFAULT_CHROMS if arguments.chrom == 'all' else arguments.chrom
+    try:
+        canonical, chrom_warnings = canonical_chroms(requested_chroms, fai_contigs)
+    except VcfInputError as exc:
+        logging.error(str(exc))
+        sys.exit(1)
+    for warning in chrom_warnings + fai_warnings(fai_contigs):
+        logging.warning(warning)
+
+    reports = check_files(arguments.vcfs, canonical, arguments.sample)
+    print(report_table(reports))
+
+    if arguments.out:
+        reports_to_dataframe(reports).to_csv(arguments.out, sep='\t', index=False)
+        logging.info(f'# Report TSV written to {arguments.out}')
+
+    if any(r.usable == 0 for r in reports):
+        sys.exit(1)
+
+
 def main():
 
     # Parse command line arguments
@@ -342,14 +363,15 @@ def main():
         logging.info(f'VCFs: {", ".join([vcf for _, vcf in arguments.vcfs])}')
         print('')
 
-        # Restrict feature extraction to a single chromosome if specified
-        if arguments.chrom != 'all':
-            chroms = arguments.chrom
-
-        # Restrict SV types if specified (default: use the module-level sv_types)
+        # Restrict feature extraction to a single chromosome if specified,
+        # otherwise run every default chromosome (run_chroms/run_sv_types are
+        # plain locals, computed unconditionally -- omitting --chrom/--sv_types
+        # used to leave the module-level chroms/sv_types names shadowed but
+        # unassigned in this scope, raising UnboundLocalError).
+        run_chroms = DEFAULT_CHROMS if arguments.chrom == 'all' else arguments.chrom
+        run_sv_types = list(arguments.sv_types or SUPPORTED_SV_TYPES)
         if arguments.sv_types:
-            sv_types = arguments.sv_types
-            logging.info(f'SV TYPES (restricted): {sv_types}')
+            logging.info(f'SV TYPES (restricted): {run_sv_types}')
 
         benchmark_rows = []
         total_t0 = perf_counter()
@@ -379,7 +401,7 @@ def main():
                 # Variant Preparation
                 logging.info('# Create Variant DataFrame')
                 VP = VariantPrep(arguments.cohort, arguments.ref, arguments.workdir,
-                                 arguments.technology, chroms, arguments.fai, sv_types)
+                                 arguments.technology, run_chroms, arguments.fai, run_sv_types)
                 logging.info('# Read VCFs')
                 VP.read_vcf(arguments.vcfs, arguments.sample)
                 logging.info('# Read Variants')
@@ -397,8 +419,8 @@ def main():
                 logging.info(f'# Collect Alignment Features')
                 paths = build_paths(arguments.workdir, arguments.sample, arguments.ref)
                 parallel_input = []
-                for sv_type in sv_types:
-                    for chrom in chroms:
+                for sv_type in run_sv_types:
+                    for chrom in run_chroms:
                         variant_annot_filename = aln_shard_path(paths, chrom, sv_type)
                         parallel_input.append((arguments.bam, paths['raw'], variant_annot_filename,
                                             chrom, sv_type, arguments.sample))
@@ -412,7 +434,7 @@ def main():
             with stage_timer('prediction', benchmark_rows):
                 # Variant Prediction
                 logging.info('# Variant Prediction')
-                score_variants(sv_types, arguments, arguments.sample)
+                score_variants(run_sv_types, arguments, arguments.sample)
 
                 # Add Info Tag to VCF
                 logging.info('# Add Info Tag to VCF')
@@ -423,6 +445,9 @@ def main():
                 merged_count, input_count = build_merged_vcf(
                     paths['dicast'], paths['merged_vcf'], arguments.sample, arguments.fai)
                 logging.info(f'Merged VCF: {merged_count} calls (from {input_count} scored calls) -> {paths["merged_vcf"]}')
+        except VcfInputError as exc:
+            logging.error(str(exc))
+            sys.exit(1)
         finally:
             _write_benchmark()
 
@@ -454,14 +479,13 @@ def main():
             logging.info(f'SV CALLERS ({sample}): {", ".join(caller for caller, _ in vcfs_by_sample[sample])}')
         print('')
 
-        # Restrict feature extraction to a single chromosome if specified
-        if arguments.chrom != 'all':
-            chroms = arguments.chrom
-
-        # Restrict SV types if specified (default: use the module-level sv_types)
+        # Restrict feature extraction to a single chromosome if specified,
+        # otherwise run every default chromosome (see the 'call' branch above
+        # for why run_chroms/run_sv_types are computed unconditionally).
+        run_chroms = DEFAULT_CHROMS if arguments.chrom == 'all' else arguments.chrom
+        run_sv_types = list(arguments.sv_types or SUPPORTED_SV_TYPES)
         if arguments.sv_types:
-            sv_types = arguments.sv_types
-            logging.info(f'SV TYPES (restricted): {sv_types}')
+            logging.info(f'SV TYPES (restricted): {run_sv_types}')
 
         benchmark_rows = []
         total_t0 = perf_counter()
@@ -496,7 +520,7 @@ def main():
                     root = sample_root(arguments.command, arguments.workdir, sample)
                     sample_paths[sample] = build_paths(root, sample, arguments.ref)
                     VP = VariantPrep(arguments.cohort, arguments.ref, root,
-                                     arguments.technology, chroms, arguments.fai, sv_types)
+                                     arguments.technology, run_chroms, arguments.fai, run_sv_types)
                     VP.read_vcf(vcfs_by_sample[sample], sample)
                     VP.read_variants()
                     VP.filter_variants()
@@ -523,8 +547,8 @@ def main():
                 logging.info('# Collect Alignment Features')
                 parallel_input = []
                 for sample in samples:
-                    for sv_type in sv_types:
-                        for chrom in chroms:
+                    for sv_type in run_sv_types:
+                        for chrom in run_chroms:
                             variant_annot_filename = aln_shard_path(sample_paths[sample], chrom, sv_type)
                             parallel_input.append((bam_dict[sample], sample_paths[sample]['raw'], variant_annot_filename,
                                                 chrom, sv_type, sample))
@@ -541,7 +565,7 @@ def main():
                 for sample in samples:
                     # Variant Prediction
                     logging.info(f'# Variant Prediction for {sample}')
-                    score_variants(sv_types, arguments, sample)
+                    score_variants(run_sv_types, arguments, sample)
 
                     # Add Info Tag to VCF (only tags this sample's own caller VCFs)
                     logging.info(f'# Add Info Tag to VCF for {sample}')
@@ -554,10 +578,17 @@ def main():
                     merged_count, input_count = build_merged_vcf(
                         sample_paths[sample]['dicast'], sample_paths[sample]['merged_vcf'], sample, arguments.fai)
                     logging.info(f'Merged VCF for {sample}: {merged_count} calls (from {input_count} scored calls) -> {sample_paths[sample]["merged_vcf"]}')
+        except VcfInputError as exc:
+            logging.error(str(exc))
+            sys.exit(1)
         finally:
             _write_benchmark()
 
         logging.info('############### End DICAST ###############\n')
+
+    elif arguments.command == 'check':
+        run_check(arguments)
+
 
 if __name__ == '__main__':
     main()

@@ -118,6 +118,18 @@ def make_workdir_tree(root: str):
     os.makedirs(os.path.join(root, 'output'), exist_ok=True)
 
 
+def _check_duplicate_callers(caller_labels: list, problems: list, scope: str = ''):
+    """ Appends a problem when a caller label is used twice: internal record
+    ids are caller:ordinal, so two files under one label would collide. """
+
+    seen = set()
+    for caller in caller_labels:
+        if caller in seen:
+            problems.append(f'Caller label used more than once{scope}: {caller} '
+                            '(give each --vcfs file a distinct label, e.g. delly_del= and delly_ins=)')
+        seen.add(caller)
+
+
 def _check_bam_index(bam_file: str, problems: list):
     """ Appends a problem if no index can be found next to a BAM file. """
 
@@ -139,6 +151,8 @@ def validate_inputs(arguments: argparse.Namespace):
         _validate_call_inputs(arguments)
     elif arguments.command == 'multi':
         _validate_multi_inputs(arguments)
+    elif arguments.command == 'check':
+        _validate_check_inputs(arguments)
 
 
 def _validate_call_inputs(arguments: argparse.Namespace):
@@ -167,6 +181,7 @@ def _validate_call_inputs(arguments: argparse.Namespace):
                 continue  # covered by the --pop-catalog check below
             elif not os.path.isfile(token[1]):
                 problems.append(f'VCF file for caller {token[0]} not found: {token[1]}')
+        _check_duplicate_callers([token[0] for token in arguments.vcfs if len(token) == 2], problems)
 
     if arguments.pop and not os.path.isfile(arguments.pop_catalog):
         problems.append(f'--pop-catalog file not found: {arguments.pop_catalog} '
@@ -229,6 +244,10 @@ def _validate_multi_inputs(arguments: argparse.Namespace):
         if not os.path.isfile(vcf_file):
             problems.append(f'VCF file for sample {sample}, caller {caller} not found: {vcf_file}')
 
+    for sample in sorted(vcf_samples):
+        _check_duplicate_callers([caller for s, caller, _ in arguments.vcfs if s == sample],
+                                 problems, scope=f' for sample {sample}')
+
     missing_vcfs = bam_samples - vcf_samples
     if missing_vcfs:
         problems.append(f'No --vcfs entries for sample(s) with a --bams entry: {", ".join(sorted(missing_vcfs))}')
@@ -253,7 +272,48 @@ def _validate_multi_inputs(arguments: argparse.Namespace):
         make_workdir_tree(os.path.join(arguments.workdir, sample))
 
 
-def parse_arguments(arguments = sys.argv[1:]):
+def _validate_check_inputs(arguments: argparse.Namespace):
+    """ Validates inputs of the 'check' subcommand: VCF and FAI file
+    existence only. `dicast check` reports what dicast understands from a
+    set of input VCFs -- it never touches a workdir, model files or
+    annotation files, so none of those are checked here. """
+
+    problems = []
+
+    def check_file(path, label):
+        if path is None:
+            problems.append(f'{label} is not set.')
+        elif not os.path.isfile(path) or not os.access(path, os.R_OK):
+            problems.append(f'{label} not found or not readable: {path}')
+
+    check_file(arguments.fai, '--fai file')
+
+    if not arguments.vcfs:
+        problems.append('--vcfs is required (format: caller=vcf_file).')
+    else:
+        for token in arguments.vcfs:
+            if len(token) != 2:
+                problems.append(f"Malformed --vcfs entry (expected caller=vcf_file): {'='.join(token)}")
+            elif not os.path.isfile(token[1]):
+                problems.append(f'VCF file for caller {token[0]} not found: {token[1]}')
+        _check_duplicate_callers([token[0] for token in arguments.vcfs if len(token) == 2], problems)
+
+    if problems:
+        for problem in problems:
+            print(f'ERROR: {problem}', file=sys.stderr)
+        sys.exit(1)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """ Builds dicast's argument parser (the 'call', 'multi' and 'check'
+    subcommands). Split out from parse_arguments() so other code (e.g. the
+    Agent Skill's flag-sync test) can introspect the parser without also
+    running resolve_annotation_paths() on a namespace.
+
+    Returns:
+        argparse.ArgumentParser: the fully configured, not-yet-applied parser.
+    """
+
     parser = argparse.ArgumentParser(description='dicast')
 
     subparsers = parser.add_subparsers(dest='command', help='Subcommands')
@@ -309,6 +369,33 @@ def parse_arguments(arguments = sys.argv[1:]):
     parser_multi.add_argument('--benchmark', help='Path to write a per-stage TSV with wall-time, CPU-time and peak RSS (feature_collection, prediction, total). If unset, no benchmark is written.', default=None)
     parser_multi.add_argument('--sv_types', help='Restrict feature extraction and prediction to these SV types. Default: DEL DUP INS.', nargs='+', choices=['DEL', 'DUP', 'INS'], default=None)
 
+    parser_check = subparsers.add_parser('check', help='Report what dicast understands from a set of input VCFs (records read/kept/dropped, contig mapping, sample column), without running the pipeline')
+    parser_check.add_argument('--vcfs', nargs='*', type=lambda kv: kv.split('='), help='List of VCF files. Needs to be in the format method=vcf_file', required=True)
+    parser_check.add_argument('--fai', help='FAI file of the reference genome', required=True)
+    parser_check.add_argument('--sample', help='Sample name (only needed to pick a column in multi-sample VCFs)', default=None)
+    parser_check.add_argument('--chrom', help='Chromosomes', nargs='+', default='all')
+    parser_check.add_argument('--out', help='Path to write the per-file report as a TSV', default=None)
+
+    return parser
+
+
+def parse_arguments(arguments=None) -> argparse.Namespace:
+    """ Parses dicast's command line arguments and resolves annotation paths.
+
+    Args:
+        arguments (list, optional): argv tokens to parse. Defaults to
+            sys.argv[1:] (evaluated at call time, not at import time).
+
+    Returns:
+        argparse.Namespace: parsed arguments, with annotation paths resolved
+        (see resolve_annotation_paths -- a no-op for 'check', which has no
+        annotation flags at all).
+    """
+
+    if arguments is None:
+        arguments = sys.argv[1:]
+
+    parser = build_parser()
     args = parser.parse_args(arguments)
     args = resolve_annotation_paths(args)
 

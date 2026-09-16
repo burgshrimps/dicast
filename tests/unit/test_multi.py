@@ -34,15 +34,16 @@ from dicast.multi import find_rescue_candidates
 # Column set find_rescue_candidates / bf.closest actually touch. Mirrors the
 # subset of VariantPrep.get_variant_df()'s real columns (see
 # dicast/utils.py:caller_vcf_to_dataframe) that the module reads.
-_VARIANT_COLS = ["sample", "id", "caller", "sv_type", "chrom", "start", "end", "sv_len", "qual"]
+_VARIANT_COLS = ["sample", "id", "vcf_id", "caller", "sv_type", "chrom", "start", "end", "sv_len", "qual"]
 
 
 def _variant(sample, id, caller, chrom="chr1", start=1000, end=2000,
-             sv_type="DEL", sv_len=1000, qual=50.0):
+             sv_type="DEL", sv_len=1000, qual=50.0, vcf_id=None):
     """Build one variant row (dict) with every column the module touches."""
     return {
         "sample": sample,
         "id": id,
+        "vcf_id": vcf_id,
         "caller": caller,
         "sv_type": sv_type,
         "chrom": chrom,
@@ -66,7 +67,7 @@ def _df(rows):
 def test_single_sample_variant_rescued_into_others():
     """A DEL only sample A's caller found is rescued into B and C, tagged
     with the rescue caller/id convention; A itself gets no rescue rows."""
-    del_a = _variant("A", "DEL_chr1_1000_2000", "manta", start=1000, end=2000)
+    del_a = _variant("A", "DEL_chr1_1000_2000", "manta", start=1000, end=2000, vcf_id="manta_DEL_1")
     own_variant_dfs = {
         "A": _df([del_a]),
         "B": _df([]),
@@ -90,6 +91,9 @@ def test_single_sample_variant_rescued_into_others():
         assert row["start"] == 1000
         assert row["end"] == 2000
         assert row["sv_type"] == "DEL"
+        # A rescue row is not read from the target sample's own VCF, so it
+        # carries no original caller ID even though the source variant did.
+        assert row["vcf_id"] is None
 
 
 @pytest.mark.unit

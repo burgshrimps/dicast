@@ -1,7 +1,7 @@
 """Unit tests for the ``dicast.cli`` orchestration module.
 
-Importing it pulls the full dependency closure (vcfpy, pysam, xgboost,
-bioframe, networkx, pyBigWig), which is only available in the project env.
+Importing it pulls the full dependency closure (pysam, xgboost, bioframe,
+networkx, pyBigWig), which is only available in the project env.
 
 Everything heavy is mocked via ``monkeypatch``:
 
@@ -11,12 +11,17 @@ Everything heavy is mocked via ``monkeypatch``:
   methods and write the expected outputs -- no real models or BAMs are needed
   for those.
 
-Synthetic inputs (feature TSVs, scores TSV, a vcfpy-parseable VCF) are built in
+Synthetic inputs (feature TSVs, scores TSV, a pysam-parseable VCF) are built in
 ``tmp_path`` so the tests are fully self-contained. EXPECTED values are always
 derived from what the test writes, never from running the function first.
 
-One integration test at the bottom runs the real ``call`` pipeline end-to-end
-(no mocks) against the shipped ``tests/data/`` chr21 demo dataset.
+Several integration tests at the bottom run the real CLI end-to-end (no
+mocks, via ``python3 -m dicast``) against the shipped ``tests/data/`` chr21
+demo dataset and small synthetic fixtures: the ``call`` pipeline (with and
+without ``--chrom``/``--sv_types``, guarding the UnboundLocalError fixed in
+this repo), and ``dicast check``/``dicast call`` against a breakend-only
+input (dicast does not pair breakends itself, so such a file has zero usable
+records).
 
 Dropped vs. the older lucid/dicast dev line's test_dicast.py
 --------------------------------------------------------------
@@ -56,10 +61,11 @@ import sys
 from types import SimpleNamespace
 
 import pandas as pd
+import pysam
 import pytest
-import vcfpy
 
 from tests.conftest import REPO_DIR
+from tests.fixtures import synthetic_vcf as sv
 from dicast import cli as dicast
 
 
@@ -252,20 +258,26 @@ def test_combine_feature_files_preserves_string_sample_and_cohort_dtypes(tmp_pat
 
 
 # ===========================================================================
-# add_info_tag_to_vcf() -- real vcfpy round-trip.
+# add_info_tag_to_vcf() -- real vcf_input.write_dq_tagged_vcf round-trip.
 # ===========================================================================
 
 _VCF_HEADER = """##fileformat=VCFv4.2
 ##contig=<ID=chr1,length=100000>
 ##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of SV">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant">
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE1
 """
 
 
 def _write_vcf(tmp_path, name, records):
-    """Write a minimal vcfpy-parseable VCF. ``records`` is a list of
-    (id, pos) tuples; each is a simple DEL record."""
+    """Write a minimal pysam-parseable VCF as plain text. ``records`` is a
+    list of (id, pos) tuples; each is a simple DEL record.
+
+    The header declares INFO/END (as every real caller emitting a symbolic
+    SV ALT does) even though these particular records don't set it --
+    pysam's writer derives a symbolic ALT's implicit END from `rec.stop`
+    regardless, and needs the header to know about the tag to do so."""
     lines = [_VCF_HEADER.rstrip("\n")]
     for rec_id, pos in records:
         lines.append(
@@ -280,8 +292,9 @@ def test_add_info_tag_to_vcf_writes_dq(tmp_path):
     sample, ref = "S1", "hg38"
     caller = "manta"
 
-    # Two variants have scores; a third (UNSCORED) is intentionally absent from
-    # the scores TSV to exercise the -1 fallback path.
+    # Three records, read (and thus ordinal-id'd) in file order: manta:0,
+    # manta:1, manta:2. The first two have scores; the third (UNSCORED) is
+    # intentionally absent from the scores TSV to exercise the -1 fallback.
     vcf_in = _write_vcf(
         tmp_path, "manta.vcf",
         [("DEL1", 1000), ("DEL2", 2000), ("UNSCORED", 3000)],
@@ -289,7 +302,7 @@ def test_add_info_tag_to_vcf_writes_dq(tmp_path):
 
     (tmp_path / "output").mkdir()
     scores = pd.DataFrame({
-        "id": ["DEL1", "DEL2"],
+        "id": ["manta:0", "manta:1"],
         "caller": [caller, caller],
         "dicast_qual": [0.91, 0.42],
         "sample": [sample, sample],
@@ -308,14 +321,14 @@ def test_add_info_tag_to_vcf_writes_dq(tmp_path):
     # (not the input filename -- two callers with same-named input files
     # would otherwise silently overwrite each other's output).
     out_path = str(tmp_path / "output" / f"{sample}_{caller}.dicast.vcf")
-    reader = vcfpy.Reader.from_path(out_path)
+    reader = pysam.VariantFile(out_path)
 
     # The DQ INFO line must have been added to the header.
-    assert "DQ" in reader.header.info_ids()
+    assert "DQ" in reader.header.info
 
-    dq_by_id = {}
-    for rec in reader:
-        dq_by_id[rec.ID[0]] = rec.INFO["DQ"]
+    # Original VCF IDs are preserved on each rebuilt record; DQ itself is
+    # looked up by the internal ordinal id (file order), not the VCF ID.
+    dq_by_id = {rec.id: rec.info["DQ"] for rec in reader}
 
     # Scored variants carry their dicast_qual as a string; the unscored one
     # falls back to '-1'.
@@ -333,7 +346,7 @@ def test_add_info_tag_to_vcf_filters_by_caller(tmp_path):
 
     (tmp_path / "output").mkdir()
     pd.DataFrame({
-        "id": ["DEL1"],
+        "id": ["manta:0"],
         "caller": ["manta"],          # different caller than 'delly'
         "dicast_qual": [0.99],
         "sample": [sample],
@@ -346,9 +359,9 @@ def test_add_info_tag_to_vcf_filters_by_caller(tmp_path):
     dicast.add_info_tag_to_vcf(args)
 
     out_path = str(tmp_path / "output" / f"{sample}_delly.dicast.vcf")
-    reader = vcfpy.Reader.from_path(out_path)
+    reader = pysam.VariantFile(out_path)
     rec = next(iter(reader))
-    assert rec.INFO["DQ"] == "-1"
+    assert rec.info["DQ"] == "-1"
 
 
 # ===========================================================================
@@ -649,16 +662,29 @@ def test_call_pipeline_end_to_end_on_demo_data(tmp_path):
     assert df["dicast_qual"].notna().all()
     assert df["dicast_qual"].between(0, 1).all()
 
+    # ids follow the internal ordinal scheme (f"{caller}:{ordinal}" over
+    # plain file-order iteration), not the VCF's own record IDs.
+    assert set(df["id"]) == {f"delly:{i}" for i in range(20)}
+
+    # vcf_id preserves the input VCF's own record IDs (delly's own
+    # DELxxxxxxxx/INSxxxxxxxx ids), independent of the internal ordinal id.
+    delly_ids = [rec.id for rec in pysam.VariantFile(str(vcf_in))]
+    assert set(df["vcf_id"]) == set(delly_ids)
+
     # The VCF got its DQ tags too, matching the scores TSV; the re-emitted
     # VCF is written into --workdir/output, named after the sample + caller
     # label (not the input filename -- see the workdir-restructure bug fix).
+    # DQ is looked up by the internal ordinal id, which follows the input
+    # VCF's own record order, so zipping the two files' record order together
+    # recovers the same pairing write_dq_tagged_vcf used.
     dq_vcf_path = str(workdir / "output" / "demo_delly.dicast.vcf")
-    reader = vcfpy.Reader.from_path(dq_vcf_path)
     scores_by_id = dict(zip(df["id"], df["dicast_qual"]))
+    reader = pysam.VariantFile(dq_vcf_path)
     seen = 0
-    for rec in reader:
-        assert rec.ID[0] in scores_by_id
-        assert float(rec.INFO["DQ"]) == pytest.approx(scores_by_id[rec.ID[0]])
+    for ordinal, rec in enumerate(reader):
+        internal_id = f"delly:{ordinal}"
+        assert internal_id in scores_by_id
+        assert float(rec.info["DQ"]) == pytest.approx(scores_by_id[internal_id])
         seen += 1
     assert seen == 20
 
@@ -669,13 +695,264 @@ def test_call_pipeline_end_to_end_on_demo_data(tmp_path):
     # data happens to cluster something).
     merged_vcf_path = workdir / "output" / "demo_hg38.SVs.dicast.merged.vcf"
     assert merged_vcf_path.is_file()
-    merged_reader = vcfpy.Reader.from_path(str(merged_vcf_path))
+    merged_reader = pysam.VariantFile(str(merged_vcf_path))
     merged_records = list(merged_reader)
     assert 0 < len(merged_records) <= len(df)
 
-    contig_order = {c.id: i for i, c in enumerate(merged_reader.header.get_lines("contig"))}
-    sort_keys = [(contig_order[rec.CHROM], rec.POS) for rec in merged_records]
+    contig_order = {name: i for i, name in enumerate(merged_reader.header.contigs)}
+    sort_keys = [(contig_order[rec.chrom], rec.pos) for rec in merged_records]
     assert sort_keys == sorted(sort_keys)
+    ids_by_internal_id = dict(zip(df["id"], df["vcf_id"]))
     for rec in merged_records:
-        assert rec.INFO["SVTYPE"] in ("DEL", "INS")
-        assert 0.0 <= float(rec.INFO["DQ"]) <= 1.0
+        assert rec.info["SVTYPE"] in ("DEL", "INS")
+        assert 0.0 <= float(rec.info["DQ"]) <= 1.0
+        # Merged records carry both the internal id (INFO/DICAST_ID, always
+        # traceable back to the scored row) and the original delly ID
+        # (the VCF ID column, since vcf_id is set for every delly call).
+        internal_id = rec.info["DICAST_ID"]
+        assert internal_id in ids_by_internal_id
+        assert rec.id == ids_by_internal_id[internal_id]
+
+
+@pytest.mark.integration
+def test_call_pipeline_runs_without_chrom_or_sv_types_flags(tmp_path):
+    """Regression test for the `run_chroms`/`run_sv_types` UnboundLocalError
+    fix in `dicast/cli.py`: without --chrom/--sv_types, `main()` used to
+    reference the (module-level, but locally-shadowed) `chroms`/`sv_types`
+    names before ever assigning them in that scope.
+
+    Omitting --chrom means every one of DEFAULT_CHROMS (chr1..chr22, chrX)
+    is iterated for alignment-feature collection, so this is slower than the
+    --chrom-restricted E2E test above; only rc==0 and the row count are
+    asserted, not the full output tree (already covered above).
+    """
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+
+    vcf_in = TEST_DATA_DIR / "demo_delly.vcf.gz"
+
+    cmd = [
+        sys.executable, "-m", "dicast", "call",
+        "--sample", "demo",
+        "--workdir", str(workdir),
+        "--fai", str(TEST_DATA_DIR / "hg38.fa.fai"),
+        "--bam", str(TEST_DATA_DIR / "demo.bam"),
+        "--vcfs", f"delly={vcf_in}",
+        "--annot-dir", str(TEST_DATA_DIR / "annot"),
+        "--threads", "2",
+    ]
+    result = subprocess.run(
+        cmd, cwd=str(REPO_DIR), capture_output=True, text=True, timeout=300)
+    assert result.returncode == 0, (
+        f"dicast.py call exited {result.returncode}\n"
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+
+    scores_path = workdir / "output" / "demo_hg38.SVs.dicast.tsv"
+    assert scores_path.is_file()
+    df = pd.read_csv(scores_path, sep="\t")
+    assert len(df) == 20
+
+
+# ===========================================================================
+# Integration: multi-caller `dicast call` across every hg38 chr21 real-caller
+# fixture at once (tests/data/callers/*_hg38_chr21_hg002.vcf.gz).
+# ===========================================================================
+
+CALLERS_DATA_DIR = REPO_DIR / "tests/data/callers"
+
+# (caller label, filename under tests/data/callers/). Every gameboycolor
+# hg38-chr21 fixture (see that directory's README) except
+# gridss_hg38_chr21_hg002.vcf.gz: that one is the *raw*, pre-
+# simple-event-annotation.R gridss output, which is entirely SVTYPE=BND with
+# no SIMPLE_TYPE, so read_caller_vcf drops 100% of its records (see
+# tests/unit/test_vcf_input_real.py's ZERO USABLE case for it). VariantPrep.
+# read_variants() deliberately raises VcfInputError when ANY input file has
+# zero usable records ("running the rest of the pipeline on such a file
+# would silently drop it from every downstream step instead of failing
+# loudly" -- dicast/prepare.py), so including the raw file here would make
+# the whole multi-caller run fail with rc=1 instead of testing anything
+# multi-caller. Its SIMPLE_TYPE-annotated companion,
+# gridss_simple_hg38_chr21_hg002.vcf.gz, carries real DEL/DUP/INS calls and
+# is used in its place -- which is exactly the scenario the SIMPLE_TYPE
+# precedence rule exists for. Caller labels are suffixed '_chr21' (distinct
+# from the plain 'delly' label used for the demo VCF below) because
+# add_info_tag_to_vcf names each per-caller output VCF after the caller
+# label alone (`{sample}_{caller}.dicast.vcf`); two --vcfs entries sharing a
+# caller label would silently overwrite each other's output file.
+CHR21_CALLER_FIXTURES = [
+    ("delly_chr21", "delly_hg38_chr21_hg002.vcf.gz"),
+    ("manta_chr21", "manta_hg38_chr21_hg002.vcf.gz"),
+    ("manta_candidate_chr21", "manta_candidatesv_hg38_chr21_hg002.vcf.gz"),
+    ("smoove_chr21", "smoove_hg38_chr21_hg002.vcf.gz"),
+    ("lumpy_chr21", "lumpy_raw_hg38_chr21_hg002.vcf.gz"),
+    ("gridss_chr21", "gridss_simple_hg38_chr21_hg002.vcf.gz"),
+    ("cnvnator_chr21", "cnvnator_hg38_chr21_hg002.vcf.gz"),
+    ("dysgu_chr21", "dysgu_hg38_chr21_hg002.vcf.gz"),
+]
+
+
+@pytest.mark.integration
+def test_call_pipeline_multi_caller_end_to_end_on_chr21_fixtures(tmp_path):
+    """Runs `dicast call` on the shipped demo BAM with the demo delly VCF
+    plus every real hg38-chr21 caller fixture at once (nine callers total),
+    the same way a user combining several callers' output for one sample
+    would. Exercises read_caller_vcf's whole dialect range together in one
+    pipeline run rather than one file at a time, and the caller-label
+    plumbing through score_variants/add_info_tag_to_vcf/build_merged_vcf.
+    """
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+
+    demo_delly_vcf = TEST_DATA_DIR / "demo_delly.vcf.gz"
+    vcfs = [("delly", demo_delly_vcf)] + [
+        (caller, CALLERS_DATA_DIR / filename)
+        for caller, filename in CHR21_CALLER_FIXTURES
+    ]
+
+    cmd = [
+        sys.executable, "-m", "dicast", "call",
+        "--sample", "demo",
+        "--workdir", str(workdir),
+        "--fai", str(TEST_DATA_DIR / "hg38.fa.fai"),
+        "--bam", str(TEST_DATA_DIR / "demo.bam"),
+        "--vcfs", *[f"{caller}={path}" for caller, path in vcfs],
+        "--annot-dir", str(TEST_DATA_DIR / "annot"),
+        "--chrom", "chr21",
+        "--sv_types", "DEL", "INS",
+        "--threads", "2",
+    ]
+    result = subprocess.run(
+        cmd, cwd=str(REPO_DIR), capture_output=True, text=True, timeout=300)
+    assert result.returncode == 0, (
+        f"dicast call exited {result.returncode}\n"
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+
+    scores_path = workdir / "output" / "demo_hg38.SVs.dicast.tsv"
+    assert scores_path.is_file()
+    df = pd.read_csv(scores_path, sep="\t")
+
+    # Every caller that had at least one DEL/INS call survives into the
+    # scores TSV -- all nine do (each fixture's tests/unit/test_vcf_input_
+    # real.py entry has kept_DEL + kept_INS > 0).
+    assert set(df["caller"]) == {caller for caller, _ in vcfs}
+
+    # Internal ids stay unique across all nine files (the whole point of the
+    # f"{caller}:{ordinal}" scheme -- distinct caller labels here guarantee
+    # it, but this is the end-to-end proof).
+    assert df["id"].is_unique
+
+    # Each per-caller DQ-tagged VCF has exactly as many records as its
+    # input -- write_dq_tagged_vcf rewrites every record it read (scored or
+    # not, DQ=-1 for the unscored ones), never subsets by --sv_types.
+    for caller, input_path in vcfs:
+        input_count = sum(1 for _ in pysam.VariantFile(str(input_path)))
+        dq_vcf_path = workdir / "output" / f"demo_{caller}.dicast.vcf"
+        assert dq_vcf_path.is_file(), f"missing DQ VCF for caller {caller}"
+        output_count = sum(1 for _ in pysam.VariantFile(str(dq_vcf_path)))
+        assert output_count == input_count, (
+            f"{caller}: input has {input_count} records, "
+            f"DQ VCF has {output_count}")
+
+    # The merged VCF exists and is non-empty.
+    merged_vcf_path = workdir / "output" / "demo_hg38.SVs.dicast.merged.vcf"
+    assert merged_vcf_path.is_file()
+    merged_records = list(pysam.VariantFile(str(merged_vcf_path)))
+    assert 0 < len(merged_records) <= len(df)
+
+
+# ===========================================================================
+# Integration: `dicast check` / `dicast call` on a breakend-only input.
+#
+# dicast does not pair breakends itself, so every record in a BND-only file
+# (raw gridss, delly TRA-only output) is dropped -- exercising both
+# commands' "zero usable records" failure mode end-to-end.
+# ===========================================================================
+
+def _write_bnd_only_vcf(tmp_path):
+    """A minimal two-record breakend pair (SVTYPE=BND, no SIMPLE_TYPE), on a
+    contig the demo FAI actually has, so every record is dropped as 'BND'
+    and the file ends up with zero usable records."""
+    return sv.write_vcf(
+        tmp_path, "bnd_only.vcf",
+        [
+            {"chrom": "chr21", "pos": 1000, "id": "BND1", "alt": "N[chr21:2000[",
+             "info": "SVTYPE=BND"},
+            {"chrom": "chr21", "pos": 2000, "id": "BND2", "alt": "]chr21:1000]N",
+             "info": "SVTYPE=BND"},
+        ],
+        contigs=[("chr21", 46709983)],
+    )
+
+
+@pytest.mark.integration
+def test_check_subcommand_on_demo_delly(tmp_path):
+    out_tsv = tmp_path / "report.tsv"
+    cmd = [
+        sys.executable, "-m", "dicast", "check",
+        "--vcfs", f"delly={TEST_DATA_DIR / 'demo_delly.vcf.gz'}",
+        "--fai", str(TEST_DATA_DIR / "hg38.fa.fai"),
+        "--sample", "demo",
+        "--out", str(out_tsv),
+    ]
+    result = subprocess.run(
+        cmd, cwd=str(REPO_DIR), capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, (
+        f"dicast check exited {result.returncode}\n"
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+
+    assert out_tsv.is_file()
+    report = pd.read_csv(out_tsv, sep="\t")
+    assert len(report) == 1
+    row = report.iloc[0]
+    assert row["caller"] == "delly"
+    assert row["records_read"] == 20
+    assert row["usable"] == 20
+    assert row["status"] == "OK"
+    assert row["kept_DEL"] == 10
+    assert row["kept_INS"] == 10
+    assert row["sample_used"] == "demo"
+
+
+@pytest.mark.integration
+def test_check_subcommand_exits_1_on_breakend_only_file(tmp_path):
+    bnd_vcf = _write_bnd_only_vcf(tmp_path)
+    cmd = [
+        sys.executable, "-m", "dicast", "check",
+        "--vcfs", f"gridss={bnd_vcf}",
+        "--fai", str(TEST_DATA_DIR / "hg38.fa.fai"),
+    ]
+    result = subprocess.run(
+        cmd, cwd=str(REPO_DIR), capture_output=True, text=True, timeout=60)
+    assert result.returncode == 1
+    # The breakend-only hint (not just the zero-usable status) shows up in
+    # the printed table.
+    assert "ZERO USABLE" in result.stdout
+    assert "breakend-only" in result.stdout
+
+
+@pytest.mark.integration
+def test_call_exits_1_with_no_traceback_on_breakend_only_file(tmp_path):
+    bnd_vcf = _write_bnd_only_vcf(tmp_path)
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+
+    cmd = [
+        sys.executable, "-m", "dicast", "call",
+        "--sample", "demo",
+        "--workdir", str(workdir),
+        "--fai", str(TEST_DATA_DIR / "hg38.fa.fai"),
+        "--bam", str(TEST_DATA_DIR / "demo.bam"),
+        "--vcfs", f"gridss={bnd_vcf}",
+        "--annot-dir", str(TEST_DATA_DIR / "annot"),
+        "--chrom", "chr21",
+        "--sv_types", "DEL", "INS",
+        "--threads", "2",
+    ]
+    result = subprocess.run(
+        cmd, cwd=str(REPO_DIR), capture_output=True, text=True, timeout=60)
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    # The per-file report table (rendered by VcfInputError's message) shows
+    # up in the log output rather than a raw stack trace.
+    assert "ZERO USABLE" in result.stderr
+    assert "breakend-only" in result.stderr

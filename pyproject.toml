@@ -18,7 +18,6 @@ dependencies = [
     "pysam",
     "pyBigWig",
     "bioframe",
-    "vcfpy",
     "matplotlib",
     "pyyaml",
     "tqdm",
