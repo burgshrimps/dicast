@@ -15,7 +15,7 @@ import math
 import pandas as pd
 import pytest
 
-from dicast.merge import select_merged_calls, genotype_to_gt, _cluster_winner_index
+from dicast.merge import select_merged_calls, genotype_to_gt, _cluster_winner_index, build_merged_vcf
 
 
 _COLUMNS = ["id", "sv_type", "chrom", "start", "end", "sv_len", "caller",
@@ -185,3 +185,46 @@ def test_cluster_winner_index_all_nan_group_does_not_raise():
 ])
 def test_genotype_to_gt(genotype, expected):
     assert genotype_to_gt(genotype) == expected
+
+
+# ---------------------------------------------------------------------------
+# build_merged_vcf: ID column / INFO/DICAST_ID
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_build_merged_vcf_id_column_and_dicast_id(tmp_path):
+    """The VCF ID column uses the original caller ID (vcf_id) when the input
+    had one, else falls back to the internal id; INFO/DICAST_ID always
+    carries the internal id so a record can be traced back to its scored
+    row."""
+    scores = pd.DataFrame([
+        {"id": "manta:0", "vcf_id": "MantaDEL:0:0:0:0:0:0", "sv_type": "DEL",
+         "chrom": "chr1", "start": 1000, "end": 2000, "sv_len": 1000,
+         "caller": "manta", "dicast_qual": 0.9, "filter": "PASS",
+         "genotype": "(1, 1)"},
+        {"id": "delly:3", "vcf_id": None, "sv_type": "INS",
+         "chrom": "chr2", "start": 5000, "end": 5001, "sv_len": 300,
+         "caller": "delly", "dicast_qual": 0.8, "filter": "PASS",
+         "genotype": "(0, 1)"},
+    ])
+    scores_path = tmp_path / "scores.tsv"
+    scores.to_csv(scores_path, sep="\t", index=False)
+
+    fai_path = tmp_path / "ref.fa.fai"
+    fai_path.write_text("chr1\t248956422\t0\t60\t61\nchr2\t242193529\t0\t60\t61\n")
+
+    out_path = tmp_path / "merged.vcf"
+    n_merged, n_input = build_merged_vcf(str(scores_path), str(out_path), "demo", str(fai_path))
+
+    assert (n_merged, n_input) == (2, 2)
+
+    lines = out_path.read_text().splitlines()
+    records = {line.split("\t")[0]: line for line in lines if not line.startswith("#")}
+
+    del_line = records["chr1"].split("\t")
+    assert del_line[2] == "MantaDEL:0:0:0:0:0:0"
+    assert "DICAST_ID=manta:0" in del_line[7]
+
+    ins_line = records["chr2"].split("\t")
+    assert ins_line[2] == "delly:3"
+    assert "DICAST_ID=delly:3" in ins_line[7]

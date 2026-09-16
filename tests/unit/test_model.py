@@ -311,7 +311,7 @@ def test_score_translocations_empty_subset():
 # ---------------------------------------------------------------------------
 
 _DB_COLUMNS = [
-    "single_id", "merged_id", "caller_id", "cohort", "sample", "reference",
+    "single_id", "merged_id", "caller_id", "vcf_id", "cohort", "sample", "reference",
     "technology", "caller", "sv_type", "chrom", "chrom_2", "start", "end",
     "sv_len", "filter", "caller_qual", "dicast_qual", "genotype",
     "performed_confirmation", "confirmation_status", "performed_curation",
@@ -319,7 +319,7 @@ _DB_COLUMNS = [
 ]
 
 _DF_COLUMNS = [
-    "id", "cohort", "sample", "reference", "technology", "caller", "sv_type",
+    "id", "vcf_id", "cohort", "sample", "reference", "technology", "caller", "sv_type",
     "chrom", "chrom_2", "start", "end", "sv_len", "filter", "qual",
     "dicast_qual", "genotype",
 ]

@@ -128,20 +128,20 @@ candidate near chr21:44.1Mb was dropped for very low mappability/coverage
 and replaced with a neighboring call).
 
 The GIAB benchmark VCF represents these as sequence-resolved REF/ALT records
-(`dicast/prepare.py` → `caller_vcf_to_dataframe` in `dicast/utils.py`
-doesn't need or use the inserted/deleted sequence — only `SVTYPE`, `END`
-(via `rec.stop`), `SVLEN` (INS only) and the sample's `GT`). So instead of
-carrying the (sometimes multi-kb) REF/ALT sequences through, the positions
-and sizes were reformatted into a minimal, standard **delly-style** VCF
-(symbolic `<DEL>`/`<INS>` ALT alleles, `PRECISE`/`SVTYPE`/`END`/`SVLEN`/
-`CIPOS`/`CIEND` INFO, `GT:DR:DV:RC` FORMAT) with a single sample column named
-`demo` (must match `--sample demo` — `caller_vcf_to_dataframe` looks up
-`rec.samples[sample]['GT']` by that exact name). `delly` was picked as the
-caller label because it's the plainest, most standard SV VCF dialect among
-the callers dicast is normally run with and needs no caller-specific
-handling in the parser.
+(`dicast/prepare.py` → `read_caller_vcf` in `dicast/vcf_input.py` doesn't need
+or use the inserted/deleted sequence — only `SVTYPE`, `END` (via `rec.stop`),
+`SVLEN` (INS only) and the sample's `GT`). So instead of carrying the
+(sometimes multi-kb) REF/ALT sequences through, the positions and sizes were
+reformatted into a minimal, standard **delly-style** VCF (symbolic
+`<DEL>`/`<INS>` ALT alleles, `PRECISE`/`SVTYPE`/`END`/`SVLEN`/`CIPOS`/`CIEND`
+INFO, `GT:DR:DV:RC` FORMAT) with a single sample column named `demo` (matches
+`--sample demo`, though `read_caller_vcf` would use it under any name since a
+single-sample VCF's one sample column is used whatever it's called — a
+mismatch only warns). `delly` was picked as the caller label because it's the
+plainest, most standard SV VCF dialect among the callers dicast is normally
+run with and needs no caller-specific handling in the parser.
 
-Verified against the real parser (`caller_vcf_to_dataframe`): all 20 records
+Verified against the real parser (`read_caller_vcf`): all 20 records
 round-trip to the expected `sv_type` / `start` / `end` / `sv_len` / `GT=(1,1)`
 / `FILTER=['PASS']`.
 

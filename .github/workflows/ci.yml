@@ -41,6 +41,7 @@ jobs:
           import dicast.multi
           import dicast.merge
           import dicast.utils
+          import dicast.vcf_input
           print('dicast: all modules imported OK')
           "
 
@@ -50,10 +51,21 @@ jobs:
           dicast --help
           dicast call --help
           dicast multi --help
+          dicast check --help
 
       - name: Run test suite
         shell: bash -el {0}
         run: python3 -m pytest tests/ -q
+
+      - name: Demo check run
+        shell: bash -el {0}
+        run: |
+          mkdir -p demo_out
+          dicast check \
+            --vcfs delly=tests/data/demo_delly.vcf.gz \
+            --fai tests/data/hg38.fa.fai \
+            --chrom chr21 \
+            --out demo_out/check.tsv
 
       - name: Demo end-to-end run
         shell: bash -el {0}

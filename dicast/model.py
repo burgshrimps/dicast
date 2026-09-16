@@ -7,6 +7,8 @@ import numpy as np
 import yaml
 from packaging import version
 
+from dicast.vcf_input import TSV_DTYPES
+
 
 
 class Dicast:
@@ -120,7 +122,7 @@ class Dicast:
         
     def load_from_csv(self, variant_filename: str):
     
-        self.variants = pd.read_csv(variant_filename, sep='\t', low_memory=False)
+        self.variants = pd.read_csv(variant_filename, sep='\t', low_memory=False, dtype=TSV_DTYPES)
         self.variants = self.variants[self.variants['sv_type'] == self.sv_type].copy().reset_index(drop=True)
         
         
@@ -294,20 +296,20 @@ class Dicast:
             pd.DataFrame: Dataframe containing variants with predictions
         """        
         
-        columns_for_export = ['single_id', 'merged_id', 'caller_id', 'cohort', 'sample', 'reference', 'technology', 'caller', 'sv_type', 
+        columns_for_export = ['single_id', 'merged_id', 'caller_id', 'vcf_id', 'cohort', 'sample', 'reference', 'technology', 'caller', 'sv_type',
                               'chrom', 'chrom_2', 'start', 'end', 'sv_len', 'filter', 'caller_qual', 'dicast_qual', 'genotype',
                               'performed_confirmation', 'confirmation_status', 'performed_curation', 'curation_status']
         return self.variants_predict[columns_for_export]
-    
-    
+
+
     def to_df(self) -> pd.DataFrame:
         """ Get predictions for variants.
 
         Returns:
             pd.DataFrame: Dataframe containing variants with predictions
-        """        
-        
-        columns_for_export = ['id', 'cohort', 'sample', 'reference', 'technology', 'caller', 'sv_type', 
+        """
+
+        columns_for_export = ['id', 'vcf_id', 'cohort', 'sample', 'reference', 'technology', 'caller', 'sv_type',
                               'chrom', 'chrom_2', 'start', 'end', 'sv_len', 'filter', 'qual', 'dicast_qual', 'genotype']
         return self.variants_predict[columns_for_export]
     

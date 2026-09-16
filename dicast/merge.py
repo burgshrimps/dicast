@@ -26,6 +26,8 @@ import pandas as pd
 import bioframe as bf
 import networkx as nx
 
+from dicast.vcf_input import TSV_DTYPES, read_fai_contigs
+
 
 # Thresholds specified by the merge feature: DEL/DUP cluster by
 # reciprocal overlap, INS by breakpoint distance.
@@ -121,7 +123,10 @@ def extract_overlap_ids(df1: pd.DataFrame, df2: pd.DataFrame, sv_type: str, max_
     closest_intervals = closest_intervals.dropna(subset=['id_1', 'id_2']).reset_index(drop=True)
     closest_intervals['diff_start'] = abs(closest_intervals['start_1'] - closest_intervals['start_2'])
     closest_intervals['diff_end'] = abs(closest_intervals['end_1'] - closest_intervals['end_2'])
-    closest_intervals['diff_len'] = closest_intervals.apply(lambda x: min([x['sv_len_1'], x['sv_len_2']]) / max([x['sv_len_1'], x['sv_len_2']]), axis=1)
+    # A zero-length record (should not reach here, but must not crash the merge) gets ratio 0.
+    closest_intervals['diff_len'] = closest_intervals.apply(
+        lambda x: min([x['sv_len_1'], x['sv_len_2']]) / max([x['sv_len_1'], x['sv_len_2']])
+        if max([x['sv_len_1'], x['sv_len_2']]) else 0.0, axis=1)
 
     # Create a mask to get all entries where sv_len_1 or sv_len_2 is nan
     mask_len_na = (closest_intervals['sv_len_1'].isna() | closest_intervals['sv_len_2'].isna())
@@ -413,19 +418,6 @@ def genotype_to_gt(genotype) -> str:
     return '/'.join(alleles)
 
 
-def read_fai_contigs(fai_path: str) -> list:
-    """ Reads an .fai index into a list of (contig_name, length) in file order. """
-
-    contigs = []
-    with open(fai_path) as f:
-        for line in f:
-            if not line.strip():
-                continue
-            fields = line.rstrip('\n').split('\t')
-            contigs.append((fields[0], int(fields[1])))
-    return contigs
-
-
 def _vcf_header_lines(sample: str, contigs: list) -> list:
     """ Builds the header lines of the minimal merged VCF (fresh header --
     this does not attempt to merge the input VCFs' headers). """
@@ -442,6 +434,7 @@ def _vcf_header_lines(sample: str, contigs: list) -> list:
         '##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Length of the structural variant">',
         '##INFO=<ID=CALLER,Number=1,Type=String,Description="Caller that produced the winning call for this cluster">',
         '##INFO=<ID=DQ,Number=1,Type=String,Description="Dicast Quality Score">',
+        '##INFO=<ID=DICAST_ID,Number=1,Type=String,Description="Internal dicast id (caller:ordinal) of the winning call">',
         '##FILTER=<ID=PASS,Description="All filters passed">',
         '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
         '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t' + sample,
@@ -456,10 +449,10 @@ def build_merged_vcf(scores_path: str, out_path: str, sample: str, fai_path: str
 
     A fresh, minimal header is written (fileformat/source/contig/INFO/FILTER/
     FORMAT lines) rather than attempting to merge the input VCFs' headers --
-    plain text is used instead of vcfpy since the header this needs (a
-    handful of INFO/FORMAT lines plus contigs from the .fai) is simpler and
-    more robust to hand-write than to coax out of vcfpy's header API for a
-    VCF that isn't derived from any single input VCF.
+    plain text is written directly since the header this needs (a handful of
+    INFO/FORMAT lines plus contigs from the .fai) is simpler and more robust
+    to hand-write than to coax out of a VCF-writing library's header API for
+    a VCF that isn't derived from any single input VCF.
 
     Args:
         scores_path (str): Path to the sample's *.SVs.dicast.tsv
@@ -472,8 +465,7 @@ def build_merged_vcf(scores_path: str, out_path: str, sample: str, fai_path: str
         (int, int): (number of merged output records, number of input scored calls)
     """
 
-    df = pd.read_csv(scores_path, sep='\t', low_memory=False,
-                     dtype={'sample': str, 'cohort_samples': str})
+    df = pd.read_csv(scores_path, sep='\t', low_memory=False, dtype=TSV_DTYPES)
     input_count = len(df)
 
     winners = select_merged_calls(df, dicast_threshold=dicast_threshold)
@@ -512,11 +504,18 @@ def build_merged_vcf(scores_path: str, out_path: str, sample: str, fai_path: str
             info_parts.append(f'SVLEN={int(round(sv_len))}')
         info_parts.append(f'CALLER={row["caller"]}')
         info_parts.append(f'DQ={dq_str}')
+        info_parts.append(f'DICAST_ID={row["id"]}')
 
         gt = genotype_to_gt(row['genotype'] if 'genotype' in row else None)
 
+        # The VCF ID column carries the original caller ID (vcf_id) when the
+        # input had one; the internal id (caller:ordinal) always survives in
+        # INFO/DICAST_ID so a record can be traced back to its scored row.
+        vcf_id = row.get('vcf_id')
+        record_id = vcf_id if pd.notna(vcf_id) and str(vcf_id).strip() else row['id']
+
         lines.append('\t'.join([
-            str(row['chrom']), str(int(row['start'])), str(row['id']), 'N', alt,
+            str(row['chrom']), str(int(row['start'])), str(record_id), 'N', alt,
             '.', str(filt), ';'.join(info_parts), 'GT', gt,
         ]))
 
